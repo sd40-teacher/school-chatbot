@@ -120,15 +120,31 @@ def vrm_viewer_component(audio_base64=None, auto_play=False):
             const btn = document.getElementById("play-btn");
             
             btn.onclick = () => {{ 
-                if(audio.src && audio.paused) {{ 
-                    audio.currentTime = 0; 
-                    audio.play(); 
-                    btn.innerText = "💬 답변 중..."; 
-                }} 
+                if(audio.src) {{
+                    if(audio.paused) {{
+                        // 재생
+                        audio.currentTime = 0; 
+                        audio.play(); 
+                        btn.innerText = "⏹ 중지"; 
+                        btn.style.background = "#ff4b4b";
+                    }} else {{
+                        // 중지
+                        audio.pause();
+                        audio.currentTime = 0;
+                        btn.innerText = "🔄 다시 듣기";
+                        btn.style.background = "#4CAF50";
+                    }}
+                }}
             }};
             
-            audio.onplay = () => {{ btn.innerText = "💬 답변 중..."; }};
-            audio.onended = () => {{ btn.innerText = "🔄 다시 듣기"; }};
+            audio.onplay = () => {{ 
+                btn.innerText = "⏹ 중지"; 
+                btn.style.background = "#ff4b4b";
+            }};
+            audio.onended = () => {{ 
+                btn.innerText = "🔄 다시 듣기"; 
+                btn.style.background = "#4CAF50";
+            }};
 
             const clock = new THREE.Clock();
             function animate() {{
