@@ -145,7 +145,7 @@ def get_vrm_viewer_html():
         scene.background = new THREE.Color(0x667eea);
         
         const camera = new THREE.PerspectiveCamera(30, window.innerWidth/window.innerHeight, 0.1, 100);
-        camera.position.set(0, 1.3, 2.5);
+        camera.position.set(0, 1.3, -2.5);
         
         const renderer = new THREE.WebGLRenderer({{ canvas, antialias: true }});
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -164,6 +164,7 @@ def get_vrm_viewer_html():
         scene.add(light);
         
         let vrm = null;
+        let isSpeaking = false;
         const clock = new THREE.Clock();
         
         const loader = new GLTFLoader();
@@ -173,13 +174,20 @@ def get_vrm_viewer_html():
             if (vrm) {{
                 VRMUtils.removeUnnecessaryVertices(vrm.scene);
                 VRMUtils.removeUnnecessaryJoints(vrm.scene);
-                vrm.scene.rotation.y = Math.PI;
                 scene.add(vrm.scene);
                 document.getElementById("loading").style.display = "none";
                 
+                // 자연스러운 팔 자세 설정
+                if (vrm.humanoid) {{
+                    const leftUpperArm = vrm.humanoid.getNormalizedBoneNode("leftUpperArm");
+                    const rightUpperArm = vrm.humanoid.getNormalizedBoneNode("rightUpperArm");
+                    if (leftUpperArm) leftUpperArm.rotation.z = 0.3;
+                    if (rightUpperArm) rightUpperArm.rotation.z = -0.3;
+                }}
+                
                 // 눈 깜빡임
                 setInterval(() => {{
-                    if (vrm && vrm.expressionManager) {{
+                    if (vrm && vrm.expressionManager && !isSpeaking) {{
                         try {{
                             vrm.expressionManager.setValue("blink", 1);
                             setTimeout(() => vrm.expressionManager.setValue("blink", 0), 100);
@@ -189,9 +197,41 @@ def get_vrm_viewer_html():
             }}
         }});
         
+        // 립싱크 함수 (외부에서 호출 가능)
+        window.startLipSync = function() {{
+            isSpeaking = true;
+        }};
+        
+        window.stopLipSync = function() {{
+            isSpeaking = false;
+            if (vrm && vrm.expressionManager) {{
+                try {{
+                    vrm.expressionManager.setValue("aa", 0);
+                    vrm.expressionManager.setValue("oh", 0);
+                }} catch(e) {{}}
+            }}
+        }};
+        
+        let lipSyncTime = 0;
         function animate() {{
             requestAnimationFrame(animate);
-            if (vrm) vrm.update(clock.getDelta());
+            const delta = clock.getDelta();
+            
+            if (vrm) {{
+                vrm.update(delta);
+                
+                // 립싱크 애니메이션
+                if (isSpeaking && vrm.expressionManager) {{
+                    lipSyncTime += delta * 12;
+                    const aa = (Math.sin(lipSyncTime) + 1) * 0.35;
+                    const oh = (Math.sin(lipSyncTime * 0.7 + 1) + 1) * 0.2;
+                    try {{
+                        vrm.expressionManager.setValue("aa", aa);
+                        vrm.expressionManager.setValue("oh", oh);
+                    }} catch(e) {{}}
+                }}
+            }}
+            
             controls.update();
             renderer.render(scene, camera);
         }}
@@ -201,6 +241,12 @@ def get_vrm_viewer_html():
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
+        }});
+        
+        // 메시지 수신 (립싱크 제어)
+        window.addEventListener("message", (e) => {{
+            if (e.data === "startLipSync") window.startLipSync();
+            if (e.data === "stopLipSync") window.stopLipSync();
         }});
     </script>
 </body>
