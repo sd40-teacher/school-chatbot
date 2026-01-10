@@ -91,15 +91,15 @@ def vrm_viewer_component(audio_base64=None, auto_play=False):
             const scene = new THREE.Scene();
             const canvas = document.getElementById("vrm-canvas");
             
-            const camera = new THREE.PerspectiveCamera(35, canvas.clientWidth / canvas.clientHeight, 0.1, 100);
-            camera.position.set(0, 1.4, 3.2); 
+            const camera = new THREE.PerspectiveCamera(30, canvas.clientWidth / canvas.clientHeight, 0.1, 100);
+            camera.position.set(0, 1.35, 1.8); 
 
             const renderer = new THREE.WebGLRenderer({{ canvas: canvas, antialias: true, alpha: true }});
             renderer.setSize(canvas.clientWidth, canvas.clientHeight);
             renderer.setPixelRatio(window.devicePixelRatio);
 
             const controls = new OrbitControls(camera, renderer.domElement);
-            controls.target.set(0, 1.25, 0); 
+            controls.target.set(0, 1.2, 0); 
             controls.update();
 
             scene.add(new THREE.AmbientLight(0xffffff, 0.7));
