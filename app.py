@@ -27,30 +27,47 @@ def load_chatbot():
 chatbot = load_chatbot()
 
 # ============================================================
-# 🔧 2. 아바타 & 오디오 통합 뷰어 (카메라 앵글 및 Idle 보정)
+# 🔧 2. 아바타 & 오디오 통합 뷰어 (토글 + 자동재생 기능 추가)
 # ============================================================
-def vrm_viewer_component(audio_base64=None):
+def vrm_viewer_component(audio_base64=None, auto_play=False):
+    # 자동재생 모드일 때 오디오 초기화 + 자동재생 시도
     audio_init_js = ""
     if audio_base64:
-        audio_init_js = f"""
-            const audio = document.getElementById("vrm-audio");
-            audio.src = "data:audio/mp3;base64,{audio_base64}";
-            const btn = document.getElementById("play-btn");
-            btn.style.background = "#ff4b4b";
-            btn.innerText = "▶ 답변 듣기 (클릭)";
-        """
+        if auto_play:
+            # 자동재생 모드: 로드 후 바로 재생 시도
+            audio_init_js = f"""
+                const audio = document.getElementById("vrm-audio");
+                audio.src = "data:audio/mp3;base64,{audio_base64}";
+                const btn = document.getElementById("play-btn");
+                btn.style.background = "#ff4b4b";
+                btn.innerText = "💬 답변 중...";
+                
+                // 자동재생 시도 (사용자 상호작용 후에만 동작)
+                audio.play().catch(e => {{
+                    btn.innerText = "▶ 답변 듣기 (클릭)";
+                }});
+            """
+        else:
+            # 수동 모드: 버튼 클릭 대기
+            audio_init_js = f"""
+                const audio = document.getElementById("vrm-audio");
+                audio.src = "data:audio/mp3;base64,{audio_base64}";
+                const btn = document.getElementById("play-btn");
+                btn.style.background = "#ff4b4b";
+                btn.innerText = "▶ 답변 듣기 (클릭)";
+            """
 
     html_code = f"""
     <div style="width: 100%; height: 620px; background: #8a94c8; border-radius: 20px; position: relative; overflow: hidden; display: flex; flex-direction: column;">
         <canvas id="vrm-canvas" style="width: 100%; height: 500px; cursor: grab;"></canvas>
         <audio id="vrm-audio" style="display:none;"></audio>
         
-        <div style="height: 120px; background: #667eea; display: flex; justify-content: center; align-items: center;">
+        <div style="height: 120px; background: #667eea; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 10px; padding: 10px;">
             <button id="play-btn" style="
-                padding: 15px 40px; font-size: 18px; font-weight: bold; cursor: pointer; 
+                padding: 12px 30px; font-size: 16px; font-weight: bold; cursor: pointer; 
                 background: #4CAF50; color: white; border: none; border-radius: 15px; 
                 box-shadow: 0 4px 15px rgba(0,0,0,0.3); width: 85%;">
-                {"🔈 질문을 입력하세요" if not audio_base64 else "▶ 답변 듣기 / 다시 듣기"}
+                {"🔈 질문을 입력하세요" if not audio_base64 else "▶ 답변 듣기 (클릭)"}
             </button>
         </div>
 
@@ -74,7 +91,6 @@ def vrm_viewer_component(audio_base64=None):
             const scene = new THREE.Scene();
             const canvas = document.getElementById("vrm-canvas");
             
-            // [수정] 카메라 위치 최적화: 높이(Y)를 올리고 거리(Z)를 확보하여 상반신이 잘 보이게 함
             const camera = new THREE.PerspectiveCamera(35, canvas.clientWidth / canvas.clientHeight, 0.1, 100);
             camera.position.set(0, 1.4, 3.2); 
 
@@ -83,7 +99,6 @@ def vrm_viewer_component(audio_base64=None):
             renderer.setPixelRatio(window.devicePixelRatio);
 
             const controls = new OrbitControls(camera, renderer.domElement);
-            // [수정] 바라보는 중심점(Target)을 캐릭터의 가슴/얼굴 높이로 고정
             controls.target.set(0, 1.25, 0); 
             controls.update();
 
@@ -97,13 +112,22 @@ def vrm_viewer_component(audio_base64=None):
             loader.load("{VRM_MODEL_URL}", (gltf) => {{
                 vrm = gltf.userData.vrm;
                 scene.add(vrm.scene);
-                vrm.scene.rotation.y = Math.PI; // 180도 회전하여 앞을 보게 함
+                vrm.scene.rotation.y = Math.PI;
                 {audio_init_js}
             }});
 
             const audio = document.getElementById("vrm-audio");
             const btn = document.getElementById("play-btn");
-            btn.onclick = () => {{ if(audio.src && audio.paused) {{ audio.currentTime = 0; audio.play(); btn.innerText = "💬 답변 중..."; }} }};
+            
+            btn.onclick = () => {{ 
+                if(audio.src && audio.paused) {{ 
+                    audio.currentTime = 0; 
+                    audio.play(); 
+                    btn.innerText = "💬 답변 중..."; 
+                }} 
+            }};
+            
+            audio.onplay = () => {{ btn.innerText = "💬 답변 중..."; }};
             audio.onended = () => {{ btn.innerText = "🔄 다시 듣기"; }};
 
             const clock = new THREE.Clock();
@@ -113,21 +137,17 @@ def vrm_viewer_component(audio_base64=None):
                 const time = clock.elapsedTime;
 
                 if (vrm) {{
-                    // --- [IDLE 동작 최적화] ---
                     const spine = vrm.humanoid.getNormalizedBoneNode('spine');
                     const neck = vrm.humanoid.getNormalizedBoneNode('neck');
                     const hips = vrm.humanoid.getNormalizedBoneNode('hips');
 
-                    // 미세하고 부드러운 흔들림 (수치 축소하여 앵글 이탈 방지)
                     if(spine) spine.rotation.x = Math.sin(time * 1.5) * 0.02; 
                     if(neck) neck.rotation.y = Math.sin(time * 0.7) * 0.04; 
-                    
-                    // Hips(골반) 위치 이동은 카메라 앵글을 흔들리게 하므로 아주 미세하게 적용
                     if(hips) hips.position.y = Math.sin(time * 1.5) * 0.002;
 
                     vrm.update(delta);
 
-                    // 립싱크 (입 모양)
+                    // 립싱크
                     if (!audio.paused && !audio.ended && vrm.expressionManager) {{
                         const s = (Math.sin(Date.now() * 0.015) + 1) * 0.4;
                         ["aa", "oh", "Fcl_MTH_A", "Fcl_MTH_O"].forEach(k => {{
@@ -150,20 +170,54 @@ def vrm_viewer_component(audio_base64=None):
 # ============================================================
 st.title("🏫 성글고 AI 도우미")
 
+# 세션 상태 초기화
 if "messages" not in st.session_state:
     st.session_state.messages = [{"role": "assistant", "content": "안녕하세요! 궁금한 점을 물어봐 주세요. 😊"}]
 if "current_audio" not in st.session_state:
     st.session_state.current_audio = None
+if "auto_voice" not in st.session_state:
+    st.session_state.auto_voice = False
+if "user_interacted" not in st.session_state:
+    st.session_state.user_interacted = False
 
 col_chat, col_vrm = st.columns([3, 2])
 
 with col_chat:
-    for msg in st.session_state.messages:
-        with st.chat_message(msg["role"]): st.markdown(msg["content"])
+    # 자동 음성 토글 (상단에 배치)
+    col_toggle, col_info = st.columns([1, 2])
+    with col_toggle:
+        auto_voice = st.toggle(
+            "🔊 자동 음성", 
+            value=st.session_state.auto_voice,
+            help="켜면 답변이 자동으로 재생됩니다"
+        )
+        # 토글 상태 변경 시 사용자 상호작용으로 인정
+        if auto_voice != st.session_state.auto_voice:
+            st.session_state.auto_voice = auto_voice
+            if auto_voice:
+                st.session_state.user_interacted = True
     
+    with col_info:
+        if st.session_state.auto_voice:
+            if st.session_state.user_interacted:
+                st.caption("✅ 자동 재생 활성화됨")
+            else:
+                st.caption("⚠️ 토글을 다시 켜서 활성화하세요")
+        else:
+            st.caption("💡 자동 음성을 켜면 답변이 바로 재생됩니다")
+    
+    st.divider()
+    
+    # 채팅 메시지 표시
+    for msg in st.session_state.messages:
+        with st.chat_message(msg["role"]): 
+            st.markdown(msg["content"])
+    
+    # 채팅 입력
     if prompt := st.chat_input("질문을 입력하세요..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"): st.markdown(prompt)
+        with st.chat_message("user"): 
+            st.markdown(prompt)
         
         with st.chat_message("assistant"):
             if chatbot:
@@ -181,4 +235,6 @@ with col_chat:
 
 with col_vrm:
     st.subheader("🎭 AI 아바타")
-    vrm_viewer_component(st.session_state.current_audio)
+    # 자동재생 조건: 토글 ON + 사용자 상호작용 완료
+    should_auto_play = st.session_state.auto_voice and st.session_state.user_interacted
+    vrm_viewer_component(st.session_state.current_audio, auto_play=should_auto_play)
