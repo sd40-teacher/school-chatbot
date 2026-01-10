@@ -9,9 +9,8 @@ import base64
 # ============================================================
 
 # VRM 아바타 모델 URL 설정
-# - 기본값: pixiv three-vrm 공식 샘플 모델
-# - 커스텀: GitHub에 VRM 파일 업로드 후 raw URL 입력
-VRM_MODEL_URL = "https://pixiv.github.io/three-vrm/packages/three-vrm/examples/models/VRM1_Constraint_Twist_Sample.vrm"
+# - 커스텀 VRM 모델 사용
+VRM_MODEL_URL = "https://chatbot.ahnsem.com/sdg1.vrm"
 
 # 음성 출력 활성화 여부
 TTS_ENABLED = True
@@ -173,9 +172,6 @@ def get_vrm_viewer_html():
             if (vrm) {{
                 VRMUtils.removeUnnecessaryVertices(vrm.scene);
                 VRMUtils.removeUnnecessaryJoints(vrm.scene);
-                
-                // 모델 180도 회전 (정면 보기)
-                vrm.scene.rotation.y = Math.PI;
                 
                 scene.add(vrm.scene);
                 document.getElementById("loading").style.display = "none";
