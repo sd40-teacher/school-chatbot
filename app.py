@@ -3,7 +3,6 @@ from rag_engine import SchoolChatbot
 from tts_engine import text_to_speech, get_audio_base64
 import os
 import base64
-import time
 
 # ============================================================
 # 🔧 1. 앱 설정 및 스타일
@@ -16,7 +15,6 @@ st.set_page_config(
     layout="wide"
 )
 
-# UI 스타일 개선
 st.markdown("""
 <style>
     .stApp { background: #f8f9fa; }
@@ -24,11 +22,10 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# API 키 및 챗봇 로드
 try:
     api_key = st.secrets["OPENROUTER_API_KEY"]
 except:
-    st.error("⚠️ API 키가 없습니다.")
+    st.error("⚠️ API 키가 설정되지 않았습니다.")
     st.stop()
 
 @st.cache_resource
@@ -41,26 +38,24 @@ def load_chatbot():
 chatbot = load_chatbot()
 
 # ============================================================
-# 🔧 2. 아바타 & 오디오 통합 뷰어 (강제 갱신 로직 추가)
+# 🔧 2. 아바타 & 오디오 통합 뷰어 (TypeError 수정 버전)
 # ============================================================
-def vrm_viewer_component(audio_base64=None, key=None):
-    # 오디오가 있을 때만 자바스크립트 실행 코드 생성
+def vrm_viewer_component(audio_base64=None, refresh_count=0):
     audio_js = ""
     if audio_base64:
         audio_js = f"""
             const audio = document.getElementById("vrm-audio");
             audio.src = "data:audio/mp3;base64,{audio_base64}";
-            // 모델 로딩과 상관없이 오디오 재생 시도
             const playAudio = () => {{
                 audio.play().catch(e => {{
-                    console.log("자동 재생이 차단됨. 사용자의 인터랙션이 필요합니다.");
-                    // 차단된 경우 화면 클릭 시 재생되도록 대기
                     window.addEventListener("click", () => audio.play(), {{ once: true }});
                 }});
             }};
             playAudio();
         """
 
+    # key 대신 HTML 내부에 주석을 넣어 
+    # 문자열이 변경될 때마다 Streamlit이 새로 그리도록 유도합니다.
     html_code = f"""
     <div style="width: 100%; height: 550px; background: #667eea; border-radius: 15px; position: relative; overflow: hidden;">
         <audio id="vrm-audio" style="display:none;"></audio>
@@ -91,8 +86,7 @@ def vrm_viewer_component(audio_base64=None, key=None):
             const renderer = new THREE.WebGLRenderer({{ 
                 canvas: document.getElementById("vrm-canvas"), 
                 antialias: true, 
-                alpha: true,
-                preserveDrawingBuffer: true 
+                alpha: true 
             }});
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(window.devicePixelRatio);
@@ -109,13 +103,12 @@ def vrm_viewer_component(audio_base64=None, key=None):
 
             const loader = new GLTFLoader();
             loader.register((parser) => new VRMLoaderPlugin(parser));
-            
             loader.load("{VRM_MODEL_URL}", (gltf) => {{
                 vrm = gltf.userData.vrm;
                 scene.add(vrm.scene);
                 vrm.scene.rotation.y = Math.PI;
                 document.getElementById("loading").style.display = "none";
-                {audio_js} // 모델 로드 완료 시점에 재생 로직 실행
+                {audio_js}
             }});
 
             const audio = document.getElementById("vrm-audio");
@@ -126,7 +119,6 @@ def vrm_viewer_component(audio_base64=None, key=None):
                 const delta = clock.getDelta();
                 if (vrm) {{
                     vrm.update(delta);
-                    
                     if (!audio.paused && !audio.ended && vrm.expressionManager) {{
                         const t = Date.now() * 0.012;
                         const val = (Math.sin(t) + 1) * 0.5;
@@ -150,15 +142,14 @@ def vrm_viewer_component(audio_base64=None, key=None):
         </script>
     </div>
     """
-    # key 매개변수를 사용하여 Streamlit이 컴포넌트를 다시 그리도록 유도
-    st.components.v1.html(html_code, height=550, key=key)
+    # key 매개변수를 제거하여 TypeError 해결
+    st.components.v1.html(html_code, height=550)
 
 # ============================================================
 # 🔧 3. 메인 로직
 # ============================================================
 st.title("🏫 성글고 AI 도우미")
 
-# 세션 상태 초기화
 if "messages" not in st.session_state:
     st.session_state.messages = [{"role": "assistant", "content": "안녕하세요! 성글고 AI 도우미입니다. 😊"}]
 if "current_audio" not in st.session_state:
@@ -187,26 +178,23 @@ with col_chat:
             
             st.session_state.messages.append({"role": "assistant", "content": response})
             st.session_state.current_audio = audio_base64
-            # 답변이 올 때마다 refresh_count를 올려서 아바타 창을 새로 고침
             st.session_state.refresh_count += 1
             st.rerun()
 
 with col_vrm:
     st.subheader("🎭 AI 도우미")
     
-    # 다시 듣기 버튼 로직
     if st.button("🔄 마지막 답변 다시 듣기", use_container_width=True):
         if st.session_state.current_audio:
-            # 카운트를 변경하면 vrm_viewer_component의 key가 바뀌어 새로고침됨
             st.session_state.refresh_count += 1
             st.rerun()
         else:
             st.warning("먼저 질문을 해서 답변을 생성해 주세요.")
 
-    # 아바타 컴포넌트 실행 (key를 부여하여 버튼 클릭 시 강제 재로딩)
+    # 수정된 함수 호출
     vrm_viewer_component(
         audio_base64=st.session_state.current_audio, 
-        key=f"vrm_display_{st.session_state.refresh_count}"
+        refresh_count=st.session_state.refresh_count
     )
 
 with st.sidebar:
