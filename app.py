@@ -145,7 +145,8 @@ def get_vrm_viewer_html():
         scene.background = new THREE.Color(0x667eea);
         
         const camera = new THREE.PerspectiveCamera(30, window.innerWidth/window.innerHeight, 0.1, 100);
-        camera.position.set(0, 1.3, 2.5);
+        camera.position.set(0, 1.3, -2.5);
+        camera.lookAt(0, 1.0, 0);
         
         const renderer = new THREE.WebGLRenderer({{ canvas, antialias: true }});
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -175,9 +176,6 @@ def get_vrm_viewer_html():
                 VRMUtils.removeUnnecessaryVertices(vrm.scene);
                 VRMUtils.removeUnnecessaryJoints(vrm.scene);
                 
-                // 모델을 180도 회전 (정면 보기)
-                vrm.scene.rotation.y = Math.PI;
-                
                 scene.add(vrm.scene);
                 document.getElementById("loading").style.display = "none";
                 
@@ -185,13 +183,16 @@ def get_vrm_viewer_html():
                 if (vrm.humanoid) {{
                     const leftUpperArm = vrm.humanoid.getNormalizedBoneNode("leftUpperArm");
                     const rightUpperArm = vrm.humanoid.getNormalizedBoneNode("rightUpperArm");
-                    const leftLowerArm = vrm.humanoid.getNormalizedBoneNode("leftLowerArm");
-                    const rightLowerArm = vrm.humanoid.getNormalizedBoneNode("rightLowerArm");
                     
-                    if (leftUpperArm) leftUpperArm.rotation.z = 1.2;
-                    if (rightUpperArm) rightUpperArm.rotation.z = -1.2;
-                    if (leftLowerArm) leftLowerArm.rotation.z = 0.1;
-                    if (rightLowerArm) rightLowerArm.rotation.z = -0.1;
+                    // 팔을 아래로 내리기 (z축 회전)
+                    if (leftUpperArm) {{
+                        leftUpperArm.rotation.z = 1.0;
+                        leftUpperArm.rotation.x = 0.2;
+                    }}
+                    if (rightUpperArm) {{
+                        rightUpperArm.rotation.z = -1.0;
+                        rightUpperArm.rotation.x = 0.2;
+                    }}
                 }}
                 
                 // 눈 깜빡임
