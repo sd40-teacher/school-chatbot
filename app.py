@@ -11,7 +11,6 @@ VRM_MODEL_URL = "https://raw.githubusercontent.com/sd40-teacher/school-chatbot/m
 
 st.set_page_config(page_title="성글고 AI 도우미", page_icon="🏫", layout="wide")
 
-# API 키 및 챗봇 로드 (오류 방지를 위한 예외 처리)
 try:
     api_key = st.secrets["OPENROUTER_API_KEY"]
 except:
@@ -23,13 +22,12 @@ def load_chatbot():
     try:
         return SchoolChatbot(api_key=api_key, docs_path="data/school_docs")
     except Exception as e:
-        st.error(f"챗봇 로딩 실패: {e}")
         return None
 
 chatbot = load_chatbot()
 
 # ============================================================
-# 🔧 2. 아바타 & 오디오 통합 뷰어 (구문 오류 완벽 검수 버전)
+# 🔧 2. 아바타 & 오디오 통합 뷰어 (카메라 유지 + Idle 복구)
 # ============================================================
 def vrm_viewer_component(audio_base64=None):
     audio_init_js = ""
@@ -76,16 +74,16 @@ def vrm_viewer_component(audio_base64=None):
             const scene = new THREE.Scene();
             const canvas = document.getElementById("vrm-canvas");
             
-            // 카메라 설정: 정수리 샷 방지를 위해 y축과 target 조정
+            // [카메라 고정] 이전 버전에서 성공했던 앵글 유지
             const camera = new THREE.PerspectiveCamera(30, canvas.clientWidth / canvas.clientHeight, 0.1, 100);
-            camera.position.set(0, 1.3, 2.5); // 상체가 잘 보이도록 뒤로 살짝 뺌
+            camera.position.set(0, 1.3, 2.5); 
 
             const renderer = new THREE.WebGLRenderer({{ canvas: canvas, antialias: true, alpha: true }});
             renderer.setSize(canvas.clientWidth, canvas.clientHeight);
             renderer.setPixelRatio(window.devicePixelRatio);
 
             const controls = new OrbitControls(camera, renderer.domElement);
-            controls.target.set(0, 1.2, 0); // 아바타 얼굴 높이에 시선 고정
+            controls.target.set(0, 1.2, 0); 
             controls.update();
 
             scene.add(new THREE.AmbientLight(0xffffff, 0.7));
@@ -95,28 +93,16 @@ def vrm_viewer_component(audio_base64=None):
 
             const loader = new GLTFLoader();
             loader.register((parser) => new VRMLoaderPlugin(parser));
-            loader.load("{VRM_MODEL_URL}", 
-                (gltf) => {{
-                    vrm = gltf.userData.vrm;
-                    scene.add(vrm.scene);
-                    vrm.scene.rotation.y = Math.PI;
-                    {audio_init_js}
-                }},
-                undefined,
-                (error) => console.error("모델 로딩 에러:", error)
-            );
+            loader.load("{VRM_MODEL_URL}", (gltf) => {{
+                vrm = gltf.userData.vrm;
+                scene.add(vrm.scene);
+                vrm.scene.rotation.y = Math.PI;
+                {audio_init_js}
+            }});
 
             const audio = document.getElementById("vrm-audio");
             const btn = document.getElementById("play-btn");
-            
-            btn.onclick = () => {{
-                if(audio.src && audio.paused) {{
-                    audio.currentTime = 0;
-                    audio.play();
-                    btn.innerText = "💬 답변 말하는 중...";
-                }}
-            }};
-            
+            btn.onclick = () => {{ if(audio.src && audio.paused) {{ audio.currentTime = 0; audio.play(); btn.innerText = "💬 답변 중..."; }} }};
             audio.onended = () => {{ btn.innerText = "🔄 다시 듣기"; }};
 
             const clock = new THREE.Clock();
@@ -126,16 +112,26 @@ def vrm_viewer_component(audio_base64=None):
                 const time = clock.elapsedTime;
 
                 if (vrm) {{
-                    vrm.update(delta);
-                    // 대기 동작 (숨쉬기)
+                    // --- [IDLE 동작 복구] ---
                     const spine = vrm.humanoid.getNormalizedBoneNode('spine');
-                    if(spine) spine.rotation.x = Math.sin(time * 1.5) * 0.02;
+                    const neck = vrm.humanoid.getNormalizedBoneNode('neck');
+                    const hips = vrm.humanoid.getNormalizedBoneNode('hips');
 
-                    // 립싱크
+                    // 부드러운 흔들림 효과
+                    if(spine) spine.rotation.x = Math.sin(time * 1.5) * 0.03; 
+                    if(neck) neck.rotation.y = Math.sin(time * 0.7) * 0.05; 
+                    if(hips) hips.position.y = Math.sin(time * 1.5) * 0.005;
+
+                    vrm.update(delta);
+
+                    // 립싱크 (입 모양)
                     if (!audio.paused && !audio.ended && vrm.expressionManager) {{
-                        const s = (Math.sin(Date.now() * 0.015) + 1) * 0.3;
-                        vrm.expressionManager.setValue("aa", s);
-                        vrm.expressionManager.setValue("Fcl_MTH_A", s);
+                        const s = (Math.sin(Date.now() * 0.015) + 1) * 0.4;
+                        ["aa", "oh", "Fcl_MTH_A", "Fcl_MTH_O"].forEach(k => {{
+                            try {{ vrm.expressionManager.setValue(k, s); }} catch(e) {{}}
+                        }});
+                    }} else if (vrm.expressionManager) {{
+                        ["aa","Fcl_MTH_A"].forEach(k => {{ try {{ vrm.expressionManager.setValue(k, 0); }} catch(e) {{}} }});
                     }}
                 }}
                 renderer.render(scene, camera);
@@ -146,13 +142,11 @@ def vrm_viewer_component(audio_base64=None):
     """
     st.components.v1.html(html_code, height=640)
 
-# ============================================================
-# 🔧 3. 메인 화면 구성
-# ============================================================
+# (이하 메인 화면 구성 코드는 이전과 동일합니다...)
 st.title("🏫 성글고 AI 도우미")
 
 if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "assistant", "content": "안녕하세요! 성글고에 대해 무엇이든 물어보세요. 😊"}]
+    st.session_state.messages = [{"role": "assistant", "content": "안녕하세요! 궁금한 점을 물어봐 주세요. 😊"}]
 if "current_audio" not in st.session_state:
     st.session_state.current_audio = None
 
@@ -161,7 +155,6 @@ col_chat, col_vrm = st.columns([3, 2])
 with col_chat:
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]): st.markdown(msg["content"])
-
     if prompt := st.chat_input("질문을 입력하세요..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"): st.markdown(prompt)
