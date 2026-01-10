@@ -197,8 +197,8 @@ def get_vrm_viewer_html():
             isSpeaking = false;
             if (vrm && vrm.expressionManager) {{
                 try {{
-                    vrm.expressionManager.setValue("aa", 0);
-                    vrm.expressionManager.setValue("oh", 0);
+                    vrm.expressionManager.setValue("Fcl_MTH_A", 0);
+                    vrm.expressionManager.setValue("Fcl_MTH_O", 0);
                 }} catch(e) {{}}
             }}
         }};
@@ -217,8 +217,8 @@ def get_vrm_viewer_html():
                     const aa = (Math.sin(lipSyncTime) + 1) * 0.35;
                     const oh = (Math.sin(lipSyncTime * 0.7 + 1) + 1) * 0.2;
                     try {{
-                        vrm.expressionManager.setValue("aa", aa);
-                        vrm.expressionManager.setValue("oh", oh);
+                        vrm.expressionManager.setValue("Fcl_MTH_A", aa);
+                        vrm.expressionManager.setValue("Fcl_MTH_O", oh);
                     }} catch(e) {{}}
                 }}
             }}
