@@ -5,17 +5,14 @@ import os
 import base64
 
 # ============================================================
-# 🔧 관리자 설정 영역 - 여기서 앱 설정을 변경하세요!
+# 🔧 관리자 설정 영역
 # ============================================================
 
-# VRM 아바타 모델 URL 설정
-# - 커스텀 VRM 모델 사용
+# VRM 아바타 모델 URL (GitHub 저장소의 sdg1.vrm 파일 주소)
 VRM_MODEL_URL = "https://raw.githubusercontent.com/sd40-teacher/school-chatbot/main/sdg1.vrm"
 
-# 음성 출력 활성화 여부
+# 기능 활성화 설정
 TTS_ENABLED = True
-
-# 아바타 표시 여부
 AVATAR_ENABLED = True
 
 # ============================================================
@@ -28,37 +25,14 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# CSS 스타일
+# CSS 스타일 적용
 st.markdown("""
 <style>
-    .main {
-        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-    }
-    
-    .stButton > button {
-        border-radius: 25px;
-        padding: 10px 25px;
-        font-weight: 600;
-        transition: all 0.3s ease;
-    }
-    
-    .stButton > button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-    }
-    
-    h1 {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        font-weight: 800;
-    }
-    
-    audio {
-        width: 100%;
-        border-radius: 30px;
-        margin-top: 10px;
-    }
+    .main { background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); }
+    .stButton > button { border-radius: 25px; padding: 10px 25px; font-weight: 600; transition: all 0.3s ease; }
+    .stButton > button:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
+    h1 { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 800; }
+    audio { width: 100%; border-radius: 30px; margin-top: 10px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -66,34 +40,27 @@ st.markdown("""
 try:
     api_key = st.secrets["OPENROUTER_API_KEY"]
 except Exception as e:
-    st.error("⚠️ API 키가 설정되지 않았습니다. Streamlit Cloud의 Secrets를 확인해주세요.")
-    st.info("📌 Streamlit Cloud → App settings → Secrets에서 OPENROUTER_API_KEY를 설정하세요.")
+    st.error("⚠️ API 키가 설정되지 않았습니다. Secrets를 확인해주세요.")
     st.stop()
 
 # 챗봇 초기화
 @st.cache_resource
 def load_chatbot():
-    with st.spinner("📚 학교 자료를 불러오는 중... 잠시만 기다려주세요."):
+    with st.spinner("📚 학교 자료를 로드 중입니다..."):
         try:
-            chatbot = SchoolChatbot(
-                api_key=api_key,
-                docs_path="data/school_docs"
-            )
+            chatbot = SchoolChatbot(api_key=api_key, docs_path="data/school_docs")
             return chatbot
         except Exception as e:
-            st.error(f"❌ 챗봇 로드 실패: {e}")
-            st.info("💡 data/school_docs 폴더에 PDF 파일이 있는지 확인해주세요.")
+            st.error(f"❌ 로드 실패: {e}")
             return None
 
 chatbot = load_chatbot()
+if chatbot is None: st.stop()
 
-if chatbot is None:
-    st.stop()
-
-# VRM Viewer HTML 생성 (관리자 설정 URL 사용)
+# VRM Viewer HTML (5개 쉐이프키 반영 버전)
 def get_vrm_viewer_html():
     return f"""
-    <div style="width: 100%; height: 400px; border-radius: 20px; overflow: hidden; 
+    <div style="width: 100%; height: 480px; border-radius: 20px; overflow: hidden; 
                 box-shadow: 0 10px 40px rgba(0,0,0,0.15); background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
         <iframe 
             id="vrm-iframe"
@@ -108,20 +75,14 @@ def get_vrm_viewer_html():
         canvas {{ width: 100%; height: 100%; display: block; }}
         #loading {{
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            color: white; text-align: center; font-family: sans-serif;
+            color: white; text-align: center; font-family: sans-serif; font-size: 14px;
         }}
-        .spinner {{
-            border: 3px solid rgba(255,255,255,0.3); border-top: 3px solid white;
-            border-radius: 50%; width: 30px; height: 30px;
-            animation: spin 1s linear infinite; margin: 0 auto 10px;
-        }}
-        @keyframes spin {{ 0% {{ transform: rotate(0deg); }} 100% {{ transform: rotate(360deg); }} }}
     </style>
 </head>
 <body>
     <div id="container">
         <canvas id="canvas"></canvas>
-        <div id="loading"><div class="spinner"></div><div>아바타 로딩 중...</div></div>
+        <div id="loading">아바타 로딩 중...</div>
     </div>
     <script type="importmap">
     {{
@@ -143,22 +104,20 @@ def get_vrm_viewer_html():
         scene.background = new THREE.Color(0x667eea);
         
         const camera = new THREE.PerspectiveCamera(30, window.innerWidth/window.innerHeight, 0.1, 100);
-        camera.position.set(0, 1.3, 2.5);
+        camera.position.set(0, 1.4, 2.3);
         
         const renderer = new THREE.WebGLRenderer({{ canvas, antialias: true }});
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setPixelRatio(window.devicePixelRatio);
         renderer.outputColorSpace = THREE.SRGBColorSpace;
         
         const controls = new OrbitControls(camera, canvas);
-        controls.target.set(0, 1.0, 0);
-        controls.enablePan = false;
+        controls.target.set(0, 1.1, 0);
         controls.enableDamping = true;
-        controls.update();
         
-        scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+        scene.add(new THREE.AmbientLight(0xffffff, 0.8));
         const light = new THREE.DirectionalLight(0xffffff, 1.0);
-        light.position.set(2, 3, 2);
+        light.position.set(1, 2, 3);
         scene.add(light);
         
         let vrm = null;
@@ -170,36 +129,28 @@ def get_vrm_viewer_html():
         loader.load("{VRM_MODEL_URL}", (gltf) => {{
             vrm = gltf.userData.vrm;
             if (vrm) {{
-                VRMUtils.removeUnnecessaryVertices(vrm.scene);
-                VRMUtils.removeUnnecessaryJoints(vrm.scene);
-                
                 scene.add(vrm.scene);
+                vrm.scene.rotation.y = 0; // 블렌더 정면 기준
                 document.getElementById("loading").style.display = "none";
                 
-                // 눈 깜빡임
                 setInterval(() => {{
                     if (vrm && vrm.expressionManager && !isSpeaking) {{
-                        try {{
-                            vrm.expressionManager.setValue("blink", 1);
-                            setTimeout(() => vrm.expressionManager.setValue("blink", 0), 100);
-                        }} catch(e) {{}}
+                        vrm.expressionManager.setValue("blink", 1);
+                        setTimeout(() => vrm.expressionManager.setValue("blink", 0), 120);
                     }}
-                }}, 3000 + Math.random() * 2000);
+                }}, 4000 + Math.random() * 2000);
             }}
-        }});
+        }}, undefined, (error) => console.error(error));
         
-        // 립싱크 함수 (외부에서 호출 가능)
-        window.startLipSync = function() {{
-            isSpeaking = true;
-        }};
-        
-        window.stopLipSync = function() {{
-            isSpeaking = false;
+        // 립싱크 시작/정지 함수
+        window.startLipSync = () => {{ isSpeaking = true; }};
+        window.stopLipSync = () => {{ 
+            isSpeaking = false; 
             if (vrm && vrm.expressionManager) {{
-                try {{
-                    vrm.expressionManager.setValue("Fcl_MTH_A", 0);
-                    vrm.expressionManager.setValue("Fcl_MTH_O", 0);
-                }} catch(e) {{}}
+                // 모든 입 모양 초기화 (다물기)
+                ["Fcl_MTH_A", "Fcl_MTH_I", "Fcl_MTH_U", "Fcl_MTH_E", "Fcl_MTH_O"].forEach(key => {{
+                    vrm.expressionManager.setValue(key, 0);
+                }});
             }}
         }};
         
@@ -210,31 +161,23 @@ def get_vrm_viewer_html():
             
             if (vrm) {{
                 vrm.update(delta);
-                
-                // 립싱크 애니메이션
                 if (isSpeaking && vrm.expressionManager) {{
-                    lipSyncTime += delta * 12;
-                    const aa = (Math.sin(lipSyncTime) + 1) * 0.35;
-                    const oh = (Math.sin(lipSyncTime * 0.7 + 1) + 1) * 0.2;
+                    lipSyncTime += delta * 15;
+                    // 5개 쉐이프키를 조합하여 자연스러운 입 움직임 생성
                     try {{
-                        vrm.expressionManager.setValue("Fcl_MTH_A", aa);
-                        vrm.expressionManager.setValue("Fcl_MTH_O", oh);
-                    }} catch(e) {{}}
+                        vrm.expressionManager.setValue("Fcl_MTH_A", (Math.sin(lipSyncTime) + 1) * 0.35);
+                        vrm.expressionManager.setValue("Fcl_MTH_I", (Math.cos(lipSyncTime * 0.5) + 1) * 0.1);
+                        vrm.expressionManager.setValue("Fcl_MTH_U", (Math.sin(lipSyncTime * 0.8) + 1) * 0.1);
+                        vrm.expressionManager.setValue("Fcl_MTH_E", (Math.cos(lipSyncTime * 1.2) + 1) * 0.15);
+                        vrm.expressionManager.setValue("Fcl_MTH_O", (Math.sin(lipSyncTime * 0.7) + 1) * 0.2);
+                    } catch(e) {{}}
                 }}
             }}
-            
             controls.update();
             renderer.render(scene, camera);
         }}
         animate();
-        
-        window.addEventListener("resize", () => {{
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        }});
-        
-        // 메시지 수신 (립싱크 제어)
+
         window.addEventListener("message", (e) => {{
             if (e.data === "startLipSync") window.startLipSync();
             if (e.data === "stopLipSync") window.stopLipSync();
@@ -243,153 +186,61 @@ def get_vrm_viewer_html():
 </body>
 </html>
             '
-            width="100%" 
-            height="100%" 
-            style="border: none;"
-            allow="autoplay"
+            width="100%" height="100%" style="border: none;" allow="autoplay"
         ></iframe>
-    </div>
-    <div style="text-align: center; margin-top: 10px;">
-        <small style="color: #666;">🎭 3D 아바타 (마우스로 드래그하여 회전)</small>
     </div>
     """
 
-# 세션 상태 초기화
+# 메시지 기록 세션 초기화
 if "messages" not in st.session_state:
-    st.session_state.messages = [
-        {
-            "role": "assistant", 
-            "content": "안녕하세요! 성동글로벌경영고등학교 AI 도우미입니다. 😊\n\n학교 교육과정, 입학 안내, 진로진학 등 궁금하신 점을 자유롭게 물어보세요!"
-        }
-    ]
-
+    st.session_state.messages = [{"role": "assistant", "content": "안녕하세요! 성동글로벌경영고등학교 AI 도우미입니다. 😊 무엇을 도와드릴까요?"}]
 if "last_audio" not in st.session_state:
     st.session_state.last_audio = None
 
-# 레이아웃 설정
+# 레이아웃 구성
 if AVATAR_ENABLED:
     col_chat, col_avatar = st.columns([3, 2])
 else:
     col_chat = st.container()
 
-# 왼쪽: 채팅 영역
 with col_chat:
     st.title("🏫 성글고 AI 도우미")
-    st.markdown("**성동글로벌경영고등학교**에 오신 것을 환영합니다!")
-    
-    # 채팅 메시지 표시
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
     
-    # 사용자 입력
-    if prompt := st.chat_input("예: ERP 수업은 어떻게 진행되나요?"):
-        # 사용자 메시지 추가
+    if prompt := st.chat_input("학교에 대해 궁금한 점을 물어보세요!"):
         st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
+        with st.chat_message("user"): st.markdown(prompt)
         
-        # 챗봇 응답
         with st.chat_message("assistant"):
-            with st.spinner("💭 답변을 생성하고 있습니다..."):
-                try:
-                    response = chatbot.ask(prompt)
-                    st.markdown(response)
-                    st.session_state.messages.append({"role": "assistant", "content": response})
-                    
-                    # TTS 생성 (관리자 설정으로 활성화된 경우)
-                    if TTS_ENABLED:
-                        with st.spinner("🔊 음성을 생성하고 있습니다..."):
-                            try:
-                                audio_bytes = text_to_speech(response)
-                                st.session_state.last_audio = audio_bytes
-                                
-                                # 오디오 플레이어 표시
-                                audio_base64 = get_audio_base64(audio_bytes)
-                                st.markdown(f"""
-                                <audio controls autoplay>
-                                    <source src="data:audio/mp3;base64,{audio_base64}" type="audio/mp3">
-                                </audio>
-                                """, unsafe_allow_html=True)
-                            except Exception as e:
-                                st.warning(f"⚠️ 음성 생성 실패: {str(e)}")
-                                
-                except Exception as e:
-                    error_msg = f"죄송합니다. 답변 생성 중 오류가 발생했습니다: {str(e)}"
-                    st.error(error_msg)
-                    st.session_state.messages.append({"role": "assistant", "content": error_msg})
+            with st.spinner("생각 중..."):
+                response = chatbot.ask(prompt)
+                st.markdown(response)
+                st.session_state.messages.append({"role": "assistant", "content": response})
+                
+                if TTS_ENABLED:
+                    audio_bytes = text_to_speech(response)
+                    st.session_state.last_audio = audio_bytes
+                    audio_base64 = get_audio_base64(audio_bytes)
+                    # 오디오 재생 시 부모 iframe에 립싱크 신호 전달
+                    st.markdown(f"""
+                    <audio id="tts-audio" controls autoplay style="display:none;">
+                        <source src="data:audio/mp3;base64,{audio_base64}" type="audio/mp3">
+                    </audio>
+                    <script>
+                        var audio = document.getElementById("tts-audio");
+                        // 재생 시 아바타 입 움직임 시작
+                        window.parent.postMessage("startLipSync", "*");
+                        audio.onplay = function() {{ window.parent.postMessage("startLipSync", "*"); }};
+                        // 종료/일시정지 시 아바타 입 움직임 정지
+                        audio.onended = function() {{ window.parent.postMessage("stopLipSync", "*"); }};
+                        audio.onpause = function() {{ window.parent.postMessage("stopLipSync", "*"); }};
+                    </script>
+                    """, unsafe_allow_html=True)
+                    st.audio(audio_bytes) # 시각적 확인을 위한 플레이어
 
-# 오른쪽: VRM 아바타 영역 (활성화된 경우)
 if AVATAR_ENABLED:
     with col_avatar:
-        st.markdown("### 🎭 AI 도우미")
-        st.components.v1.html(get_vrm_viewer_html(), height=480)
-        
-        # 마지막 응답 다시 듣기
-        if TTS_ENABLED and st.session_state.last_audio:
-            if st.button("🔄 마지막 응답 다시 듣기", use_container_width=True):
-                audio_base64 = get_audio_base64(st.session_state.last_audio)
-                st.markdown(f"""
-                <audio controls autoplay>
-                    <source src="data:audio/mp3;base64,{audio_base64}" type="audio/mp3">
-                </audio>
-                """, unsafe_allow_html=True)
-
-# 사이드바
-with st.sidebar:
-    st.image("https://via.placeholder.com/200x80/667eea/ffffff?text=성글고", use_container_width=True)
-    
-    st.header("📖 이용 안내")
-    
-    st.markdown("""
-    ### 💬 질문 예시
-    - 학교 교육과정은 어떻게 되나요?
-    - ERP 수업에 대해 알려주세요
-    - 입학 전형은 어떻게 진행되나요?
-    - 졸업 후 진로는 어떻게 되나요?
-    - 학교 위치와 연락처 알려주세요
-    
-    ### 💡 사용 팁
-    - 구체적으로 질문할수록 정확한 답변을 받을 수 있습니다
-    """)
-    
-    if TTS_ENABLED:
-        st.markdown("- 🔊 답변을 음성으로 들을 수 있습니다")
-    
-    if AVATAR_ENABLED:
-        st.markdown("- 🎭 아바타를 마우스로 드래그하여 회전할 수 있습니다")
-    
-    st.divider()
-    
-    # 학교 정보
-    st.markdown("""
-    ### 🏫 학교 정보
-    **성동글로벌경영고등학교**
-    
-    📍 주소  
-    서울 중구 퇴계로 375 (신당동)
-    
-    📞 전화  
-    02-2252-1932
-    
-    🌐 홈페이지  
-    [sdglobal.sen.hs.kr](https://sdglobal.sen.hs.kr/)
-    """)
-    
-    st.divider()
-    
-    # 대화 초기화 버튼
-    if st.button("🔄 대화 내용 초기화", use_container_width=True):
-        st.session_state.messages = [
-            {
-                "role": "assistant", 
-                "content": "안녕하세요! 성동글로벌경영고등학교 AI 도우미입니다. 😊\n\n학교 교육과정, 입학 안내, 진로진학 등 궁금하신 점을 자유롭게 물어보세요!"
-            }
-        ]
-        st.session_state.last_audio = None
-        st.rerun()
-    
-    # 푸터
-    st.markdown("---")
-    st.caption("🤖 Powered by OpenRouter + Edge TTS")
-    st.caption("📅 2025년 성동글로벌경영고등학교")
+        st.markdown("### 🎭 AI 아바타")
+        st.components.v1.html(get_vrm_viewer_html(), height=500)
