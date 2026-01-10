@@ -35,9 +35,10 @@ def load_chatbot():
 chatbot = load_chatbot()
 
 def get_vrm_viewer_html():
+    # 180도 회전(Math.PI) 및 조작 가능하도록 수정된 HTML
     return f"""
     <div style="width: 100%; height: 500px; border-radius: 20px; overflow: hidden; 
-                box-shadow: 0 10px 40px rgba(0,0,0,0.15); background: #667eea;">
+                box-shadow: 0 10px 40px rgba(0,0,0,0.15); background: #667eea; position: relative;">
         <iframe 
             id="vrm-iframe"
             srcdoc='
@@ -45,8 +46,10 @@ def get_vrm_viewer_html():
 <html>
 <head>
     <style>
-        body {{ margin: 0; overflow: hidden; background: #667eea; }}
+        body {{ margin: 0; overflow: hidden; background: #667eea; cursor: grab; }}
+        body:active {{ cursor: grabbing; }}
         #container {{ width: 100%; height: 100vh; }}
+        canvas {{ width: 100%; height: 100%; outline: none; }}
     </style>
 </head>
 <body>
@@ -63,18 +66,26 @@ def get_vrm_viewer_html():
     <script type="module">
         import * as THREE from "three";
         import {{ GLTFLoader }} from "three/addons/loaders/GLTFLoader.js";
+        import {{ OrbitControls }} from "three/addons/controls/OrbitControls.js";
         import {{ VRMLoaderPlugin }} from "@pixiv/three-vrm";
         
         const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(30, window.innerWidth/window.innerHeight, 0.1, 100);
-        camera.position.set(0, 1.35, 2.0);
+        const camera = new THREE.PerspectiveCamera(35, window.innerWidth/window.innerHeight, 0.1, 100);
+        camera.position.set(0, 1.4, 2.5); // 카메라 위치 조정
         
         const renderer = new THREE.WebGLRenderer({{ antialias: true, alpha: true }});
         renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
         renderer.outputColorSpace = THREE.SRGBColorSpace;
         document.getElementById("container").appendChild(renderer.domElement);
         
-        scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+        // 마우스 조작 추가
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.target.set(0, 1.2, 0);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.1;
+        
+        scene.add(new THREE.AmbientLight(0xffffff, 1.0));
         const light = new THREE.DirectionalLight(0xffffff, 1.0);
         light.position.set(1, 2, 3);
         scene.add(light);
@@ -88,13 +99,12 @@ def get_vrm_viewer_html():
         loader.load("{VRM_MODEL_URL}", (gltf) => {{
             vrm = gltf.userData.vrm;
             scene.add(vrm.scene);
-            vrm.scene.rotation.y = 0;
-            console.log("VRM 로드 완료", vrm);
+            // 등이 보일 경우 180도 회전 (Math.PI)
+            vrm.scene.rotation.y = Math.PI; 
         }});
         
-        // 부모 창으로부터 메시지 수신 (가장 확실한 방법)
         window.addEventListener("message", (e) => {{
-            if (e.data === "startLipSync") {{ isSpeaking = true; console.log("입 움직임 시작"); }}
+            if (e.data === "startLipSync") isSpeaking = true;
             if (e.data === "stopLipSync") {{ 
                 isSpeaking = false; 
                 if (vrm && vrm.expressionManager) {{
@@ -112,14 +122,18 @@ def get_vrm_viewer_html():
             if (vrm) {{
                 vrm.update(delta);
                 if (isSpeaking && vrm.expressionManager) {{
-                    const s = (Math.sin(Date.now() * 0.015) + 1) * 0.4;
-                    // 표준 이름과 커스텀 이름 모두에 값 부여 (안전장치)
-                    const names = ["aa", "oh", "Fcl_MTH_A", "Fcl_MTH_O"];
-                    names.forEach(n => {{
-                        try {{ vrm.expressionManager.setValue(n, s); }} catch(e) {{}}
-                    }});
+                    const t = Date.now() * 0.015;
+                    // 5개 쉐이프키 조합 립싱크
+                    try {{
+                        vrm.expressionManager.setValue("Fcl_MTH_A", (Math.sin(t) + 1) * 0.3);
+                        vrm.expressionManager.setValue("Fcl_MTH_I", (Math.cos(t * 0.6) + 1) * 0.1);
+                        vrm.expressionManager.setValue("Fcl_MTH_U", (Math.sin(t * 0.8) + 1) * 0.1);
+                        vrm.expressionManager.setValue("Fcl_MTH_E", (Math.cos(t * 1.1) + 1) * 0.15);
+                        vrm.expressionManager.setValue("Fcl_MTH_O", (Math.sin(t * 0.7) + 1) * 0.2);
+                    }} catch(e) {{}}
                 }}
             }}
+            controls.update();
             renderer.render(scene, camera);
         }}
         animate();
@@ -132,11 +146,11 @@ def get_vrm_viewer_html():
     </div>
     """
 
-# 채팅 UI
+# --- 이하 Streamlit UI 코드 (기존과 동일하되 최적화) ---
 st.title("🏫 성글고 AI 도우미")
 
 if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "assistant", "content": "안녕하세요! 무엇을 도와드릴까요?"}]
+    st.session_state.messages = [{"role": "assistant", "content": "안녕하세요! 성동글로벌경영고등학교 AI 도우미입니다. 😊"}]
 
 col1, col2 = st.columns([3, 2])
 
@@ -157,28 +171,21 @@ with col1:
                 audio_bytes = text_to_speech(response)
                 audio_base64 = get_audio_base64(audio_bytes)
                 
-                # JavaScript를 통한 iframe 직접 제어
                 st.markdown(f"""
                 <audio id="audio-tag" src="data:audio/mp3;base64,{audio_base64}" autoplay style="display:none;"></audio>
                 <script>
                     var audio = document.getElementById("audio-tag");
-                    var iframe = window.parent.document.querySelector("iframe[srcdoc*='vrm-iframe']");
-                    
                     function send(msg) {{
                         const frames = window.parent.document.getElementsByTagName("iframe");
-                        for (let f of frames) {{
-                            f.contentWindow.postMessage(msg, "*");
-                        }}
+                        for (let f of frames) {{ f.contentWindow.postMessage(msg, "*"); }}
                     }}
-
                     audio.onplay = () => send("startLipSync");
                     audio.onended = () => send("stopLipSync");
                     audio.onpause = () => send("stopLipSync");
-                    
-                    // 재생 시작 강제 트리거
-                    audio.play().then(() => send("startLipSync"));
+                    audio.play();
                 </script>
                 """, unsafe_allow_html=True)
+                st.audio(audio_bytes)
 
 with col2:
     if AVATAR_ENABLED:
