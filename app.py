@@ -9,10 +9,9 @@ import base64
 # ============================================================
 
 # VRM 아바타 모델 URL 설정
-# - 기본값: pixiv 샘플 모델
+# - 기본값: VRoid 공식 CC0 샘플 모델 (AvatarSample_A)
 # - 커스텀: GitHub에 VRM 파일 업로드 후 raw URL 입력
-#   예: "https://raw.githubusercontent.com/your-repo/main/avatar.vrm"
-VRM_MODEL_URL = "https://pixiv.github.io/three-vrm/packages/three-vrm/examples/models/VRM1_Constraint_Twist_Sample.vrm"
+VRM_MODEL_URL = "https://cdn.jsdelivr.net/gh/madjin/vrm-samples@master/vroid/AvatarSample_A.vrm"
 
 # 음성 출력 활성화 여부
 TTS_ENABLED = True
@@ -145,8 +144,7 @@ def get_vrm_viewer_html():
         scene.background = new THREE.Color(0x667eea);
         
         const camera = new THREE.PerspectiveCamera(30, window.innerWidth/window.innerHeight, 0.1, 100);
-        camera.position.set(0, 1.3, -2.5);
-        camera.lookAt(0, 1.0, 0);
+        camera.position.set(0, 1.3, 2.5);
         
         const renderer = new THREE.WebGLRenderer({{ canvas, antialias: true }});
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -178,22 +176,6 @@ def get_vrm_viewer_html():
                 
                 scene.add(vrm.scene);
                 document.getElementById("loading").style.display = "none";
-                
-                // 자연스러운 팔 자세 설정 (T-pose 해제)
-                if (vrm.humanoid) {{
-                    const leftUpperArm = vrm.humanoid.getNormalizedBoneNode("leftUpperArm");
-                    const rightUpperArm = vrm.humanoid.getNormalizedBoneNode("rightUpperArm");
-                    
-                    // 팔을 아래로 내리기 (z축 회전)
-                    if (leftUpperArm) {{
-                        leftUpperArm.rotation.z = 1.0;
-                        leftUpperArm.rotation.x = 0.2;
-                    }}
-                    if (rightUpperArm) {{
-                        rightUpperArm.rotation.z = -1.0;
-                        rightUpperArm.rotation.x = 0.2;
-                    }}
-                }}
                 
                 // 눈 깜빡임
                 setInterval(() => {{
