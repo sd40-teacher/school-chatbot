@@ -99,7 +99,7 @@ def vrm_viewer_component(audio_base64=None, auto_play=False):
             renderer.setPixelRatio(window.devicePixelRatio);
 
             const controls = new OrbitControls(camera, renderer.domElement);
-            controls.target.set(0, 1.25, 0); 
+            controls.target.set(0, 0.85, 0); 
             controls.update();
 
             scene.add(new THREE.AmbientLight(0xffffff, 0.7));
