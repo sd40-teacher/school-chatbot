@@ -1,6 +1,6 @@
 # 🏫 성동글로벌경영고등학교 AI 챗봇
 
-학교 소개 자료 기반 AI 챗봇 시스템입니다.
+학교 소개 자료 기반 AI 챗봇 시스템입니다. **음성 합성(TTS)**과 **3D 아바타(VRM)** 기능이 포함되어 있습니다.
 
 ## 📌 프로젝트 소개
 
@@ -12,6 +12,8 @@
 - ✅ 무료 OpenRouter API 사용 (Gemini 2.0 Flash)
 - ✅ 웹 브라우저에서 바로 사용 가능
 - ✅ 학교 홈페이지 임베드 가능
+- 🔊 **NEW! Edge TTS 음성 합성** - AI 응답을 자연스러운 한국어 음성으로 듣기
+- 🎭 **NEW! VRM 3D 아바타** - Three.js 기반 인터랙티브 아바타 뷰어
 
 ## 🏫 학교 정보
 
@@ -29,11 +31,16 @@ school-chatbot/
 │       ├── README.md         # PDF 업로드 안내
 │       └── [학교소개.pdf]    # 여기에 PDF 업로드!
 │
+├── static/
+│   ├── vrm_viewer.html       # VRM 뷰어 (기본)
+│   └── vrm_avatar.html       # VRM 뷰어 (고급, 립싱크 지원)
+│
 ├── .streamlit/
 │   └── secrets.toml          # API 키 설정 (중요!)
 │
 ├── app.py                    # Streamlit 메인 앱
 ├── rag_engine.py             # RAG 챗봇 엔진
+├── tts_engine.py             # Edge TTS 음성 합성 엔진
 ├── requirements.txt          # 필요한 패키지 목록
 └── README.md                 # 이 파일
 ```
@@ -116,8 +123,38 @@ https://school-chatbot-xxxxx.streamlit.app/
 - **Frontend**: Streamlit
 - **Backend**: LangChain + FAISS
 - **LLM**: Google Gemini 2.0 Flash (via OpenRouter)
-- **Embedding**: text-embedding-3-small
+- **Embedding**: ko-sroberta-multitask (HuggingFace)
+- **TTS**: Microsoft Edge TTS (한국어 Neural 음성)
+- **3D Avatar**: Three.js + @pixiv/three-vrm
 - **Hosting**: Streamlit Cloud (무료)
+
+## 🔊 Edge TTS 음성 기능
+
+### 지원 음성
+| 음성 이름 | 설명 | 음성 ID |
+|----------|------|---------|
+| 선희 (여성) | 자연스러운 여성 음성 | ko-KR-SunHiNeural |
+| 인준 (남성) | 자연스러운 남성 음성 | ko-KR-InJoonNeural |
+
+### 사용 방법
+1. 사이드바에서 "음성 출력" 토글 활성화
+2. 원하는 음성 선택
+3. 질문 입력 후 자동으로 음성 재생
+4. "마지막 응답 다시 듣기" 버튼으로 재청취 가능
+
+## 🎭 VRM 아바타 기능
+
+### 지원 기능
+- 마우스 드래그로 3D 회전
+- 다양한 표정 (기쁨, 놀람, 편안함 등)
+- 인사 애니메이션 (손 흔들기, 절)
+- 립싱크 (말하는 동안 입 움직임)
+- 눈 깜빡임 자동 애니메이션
+
+### 커스텀 VRM 모델 사용
+1. VRoid Studio에서 아바타 생성 후 VRM 형식으로 내보내기
+2. VRM 파일을 static/ 폴더에 업로드
+3. vrm_avatar.html의 DEFAULT_VRM_URL 수정
 
 ## 📊 비용
 

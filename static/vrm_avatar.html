@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>School Chatbot VRM Avatar</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            overflow: hidden;
+        }
+        
+        #vrm-container {
+            width: 100%;
+            height: 100vh;
+            position: relative;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        #vrm-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 16px;
+            text-align: center;
+            z-index: 100;
+            background: rgba(0,0,0,0.3);
+            padding: 20px 30px;
+            border-radius: 15px;
+            backdrop-filter: blur(5px);
+        }
+        
+        .spinner {
+            border: 3px solid rgba(255,255,255,0.3);
+            border-top: 3px solid white;
+            border-radius: 50%;
+            width: 35px;
+            height: 35px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 12px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        #controls {
+            position: absolute;
+            bottom: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 8px;
+            z-index: 10;
+            flex-wrap: wrap;
+            justify-content: center;
+            max-width: 95%;
+        }
+        
+        .control-btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 20px;
+            background: rgba(255,255,255,0.95);
+            color: #333;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+            white-space: nowrap;
+        }
+        
+        .control-btn:hover {
+            background: white;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        
+        .control-btn.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        #speech-indicator {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            padding: 8px 16px;
+            background: rgba(0,0,0,0.6);
+            color: white;
+            border-radius: 15px;
+            font-size: 13px;
+            display: none;
+            z-index: 10;
+            backdrop-filter: blur(5px);
+        }
+        
+        #speech-indicator.speaking {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            animation: glow 1.5s infinite;
+        }
+        
+        @keyframes glow {
+            0%, 100% { box-shadow: 0 0 10px rgba(102, 126, 234, 0.5); }
+            50% { box-shadow: 0 0 20px rgba(102, 126, 234, 0.8); }
+        }
+        
+        .sound-wave {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            height: 16px;
+        }
+        
+        .wave-bar {
+            width: 3px;
+            background: #4CAF50;
+            border-radius: 2px;
+            animation: wave 0.5s ease-in-out infinite;
+        }
+        
+        .wave-bar:nth-child(1) { animation-delay: 0s; height: 8px; }
+        .wave-bar:nth-child(2) { animation-delay: 0.1s; height: 12px; }
+        .wave-bar:nth-child(3) { animation-delay: 0.2s; height: 16px; }
+        .wave-bar:nth-child(4) { animation-delay: 0.1s; height: 12px; }
+        .wave-bar:nth-child(5) { animation-delay: 0s; height: 8px; }
+        
+        @keyframes wave {
+            0%, 100% { transform: scaleY(0.5); }
+            50% { transform: scaleY(1); }
+        }
+        
+        #status {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            padding: 6px 12px;
+            background: rgba(0,0,0,0.5);
+            color: white;
+            border-radius: 10px;
+            font-size: 11px;
+            z-index: 10;
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="vrm-container">
+        <canvas id="vrm-canvas"></canvas>
+        
+        <div id="loading">
+            <div class="spinner"></div>
+            <div>아바타 로딩 중...</div>
+        </div>
+        
+        <div id="status">⏳ 초기화 중...</div>
+        
+        <div id="speech-indicator">
+            <div class="sound-wave">
+                <div class="wave-bar"></div>
+                <div class="wave-bar"></div>
+                <div class="wave-bar"></div>
+                <div class="wave-bar"></div>
+                <div class="wave-bar"></div>
+            </div>
+            <span>말하는 중...</span>
+        </div>
+        
+        <div id="controls">
+            <button class="control-btn active" onclick="setEmotion('neutral')">😊 기본</button>
+            <button class="control-btn" onclick="setEmotion('happy')">😄 기쁨</button>
+            <button class="control-btn" onclick="setEmotion('surprised')">😮 놀람</button>
+            <button class="control-btn" onclick="setEmotion('relaxed')">😌 편안</button>
+            <button class="control-btn" onclick="doWave()">👋 인사</button>
+            <button class="control-btn" onclick="doBow()">🙇 인사(절)</button>
+        </div>
+    </div>
+
+    <!-- Import maps for Three.js -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.158.0/examples/jsm/",
+            "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3.1.3/lib/three-vrm.module.min.js"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
+
+        // 전역 변수
+        let scene, camera, renderer, controls;
+        let currentVrm = null;
+        let clock = new THREE.Clock();
+        
+        // 립싱크 관련
+        let isSpeaking = false;
+        let lipSyncInterval = null;
+        let blinkInterval = null;
+        
+        // 기본 VRM 모델 URL
+        const DEFAULT_VRM_URL = 'https://pixiv.github.io/three-vrm/packages/three-vrm/examples/models/VRM1_Constraint_Twist_Sample.vrm';
+        
+        // 상태 업데이트
+        function updateStatus(text) {
+            document.getElementById('status').textContent = text;
+        }
+        
+        // 초기화
+        function init() {
+            const container = document.getElementById('vrm-container');
+            const canvas = document.getElementById('vrm-canvas');
+            
+            updateStatus('🎬 씬 초기화 중...');
+            
+            // Scene
+            scene = new THREE.Scene();
+            
+            // 그라데이션 배경
+            const bgTexture = createGradientTexture();
+            scene.background = bgTexture;
+            
+            // Camera
+            camera = new THREE.PerspectiveCamera(
+                30,
+                container.clientWidth / container.clientHeight,
+                0.1,
+                100
+            );
+            camera.position.set(0, 1.3, 2.5);
+            
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ 
+                canvas: canvas,
+                antialias: true,
+                alpha: true
+            });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.outputColorSpace = THREE.SRGBColorSpace;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.0;
+            
+            // Controls
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.target.set(0, 1.0, 0);
+            controls.enablePan = false;
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.minDistance = 1.5;
+            controls.maxDistance = 4;
+            controls.maxPolarAngle = Math.PI * 0.75;
+            controls.minPolarAngle = Math.PI * 0.25;
+            controls.update();
+            
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+            scene.add(ambientLight);
+            
+            const mainLight = new THREE.DirectionalLight(0xffffff, 1.0);
+            mainLight.position.set(2, 3, 2);
+            mainLight.castShadow = true;
+            scene.add(mainLight);
+            
+            const fillLight = new THREE.DirectionalLight(0x8888ff, 0.3);
+            fillLight.position.set(-2, 1, -1);
+            scene.add(fillLight);
+            
+            const rimLight = new THREE.DirectionalLight(0xffffff, 0.5);
+            rimLight.position.set(0, 2, -3);
+            scene.add(rimLight);
+            
+            updateStatus('📥 모델 로딩 중...');
+            
+            // VRM 로드
+            loadVRM(DEFAULT_VRM_URL);
+            
+            // 리사이즈 핸들러
+            window.addEventListener('resize', onWindowResize);
+            
+            // 눈 깜빡임 시작
+            startBlink();
+            
+            // 애니메이션 루프 시작
+            animate();
+        }
+        
+        // 그라데이션 배경 텍스처 생성
+        function createGradientTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 2;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+            
+            const gradient = ctx.createLinearGradient(0, 0, 0, 512);
+            gradient.addColorStop(0, '#667eea');
+            gradient.addColorStop(1, '#764ba2');
+            
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, 2, 512);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.needsUpdate = true;
+            return texture;
+        }
+        
+        // VRM 로드
+        function loadVRM(url) {
+            const loader = new GLTFLoader();
+            loader.register((parser) => new VRMLoaderPlugin(parser));
+            
+            loader.load(
+                url,
+                (gltf) => {
+                    const vrm = gltf.userData.vrm;
+                    
+                    if (!vrm) {
+                        console.error('VRM 데이터를 찾을 수 없습니다');
+                        document.getElementById('loading').innerHTML = 
+                            '<div style="color: #ff6b6b;">⚠️ 모델 형식 오류</div>';
+                        return;
+                    }
+                    
+                    // 기존 VRM 제거
+                    if (currentVrm) {
+                        scene.remove(currentVrm.scene);
+                        VRMUtils.deepDispose(currentVrm.scene);
+                    }
+                    
+                    currentVrm = vrm;
+                    
+                    // 모델 최적화
+                    VRMUtils.removeUnnecessaryVertices(vrm.scene);
+                    VRMUtils.removeUnnecessaryJoints(vrm.scene);
+                    
+                    scene.add(vrm.scene);
+                    
+                    // 초기 회전 (정면 보기)
+                    vrm.scene.rotation.y = Math.PI;
+                    
+                    // 로딩 완료
+                    document.getElementById('loading').classList.add('hidden');
+                    updateStatus('✅ 준비 완료');
+                    
+                    console.log('VRM 로드 완료:', vrm);
+                },
+                (progress) => {
+                    if (progress.total > 0) {
+                        const percent = Math.round(progress.loaded / progress.total * 100);
+                        document.getElementById('loading').innerHTML = 
+                            `<div class="spinner"></div><div>로딩 중... ${percent}%</div>`;
+                    }
+                },
+                (error) => {
+                    console.error('VRM 로드 오류:', error);
+                    document.getElementById('loading').innerHTML = 
+                        '<div style="color: #ff6b6b;">⚠️ 모델 로드 실패</div>';
+                    updateStatus('❌ 로드 실패');
+                }
+            );
+        }
+        
+        // 표정 설정
+        window.setEmotion = function(emotionName) {
+            if (!currentVrm || !currentVrm.expressionManager) return;
+            
+            const em = currentVrm.expressionManager;
+            
+            // 모든 표정 리셋
+            const expressions = ['happy', 'angry', 'sad', 'surprised', 'relaxed'];
+            expressions.forEach(exp => {
+                try { em.setValue(exp, 0); } catch(e) {}
+            });
+            
+            // 새 표정 설정
+            if (emotionName !== 'neutral') {
+                try { em.setValue(emotionName, 1.0); } catch(e) {}
+            }
+            
+            // 버튼 활성화 표시
+            document.querySelectorAll('.control-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            updateStatus(`😊 표정: ${emotionName}`);
+        };
+        
+        // 눈 깜빡임
+        function startBlink() {
+            blinkInterval = setInterval(() => {
+                if (!currentVrm || !currentVrm.expressionManager || isSpeaking) return;
+                
+                const em = currentVrm.expressionManager;
+                
+                // 깜빡임
+                try {
+                    em.setValue('blink', 1);
+                    setTimeout(() => {
+                        try { em.setValue('blink', 0); } catch(e) {}
+                    }, 100);
+                } catch(e) {}
+                
+            }, 3000 + Math.random() * 2000);
+        }
+        
+        // 인사 (손 흔들기)
+        window.doWave = function() {
+            if (!currentVrm || !currentVrm.humanoid) return;
+            
+            const rightUpperArm = currentVrm.humanoid.getNormalizedBoneNode('rightUpperArm');
+            const rightLowerArm = currentVrm.humanoid.getNormalizedBoneNode('rightLowerArm');
+            const rightHand = currentVrm.humanoid.getNormalizedBoneNode('rightHand');
+            
+            if (!rightUpperArm || !rightLowerArm) return;
+            
+            updateStatus('👋 인사 중...');
+            
+            let time = 0;
+            const waveAnim = setInterval(() => {
+                time += 0.08;
+                
+                // 팔 들기 및 흔들기
+                rightUpperArm.rotation.z = -1.5 + Math.sin(time * 6) * 0.15;
+                rightUpperArm.rotation.x = -0.3;
+                rightLowerArm.rotation.y = -0.8 + Math.sin(time * 8) * 0.2;
+                
+                if (rightHand) {
+                    rightHand.rotation.z = Math.sin(time * 10) * 0.3;
+                }
+                
+                if (time > Math.PI * 1.5) {
+                    clearInterval(waveAnim);
+                    // 리셋
+                    rightUpperArm.rotation.set(0, 0, 0);
+                    rightLowerArm.rotation.set(0, 0, 0);
+                    if (rightHand) rightHand.rotation.set(0, 0, 0);
+                    updateStatus('✅ 준비 완료');
+                }
+            }, 16);
+        };
+        
+        // 인사 (절)
+        window.doBow = function() {
+            if (!currentVrm || !currentVrm.humanoid) return;
+            
+            const spine = currentVrm.humanoid.getNormalizedBoneNode('spine');
+            const chest = currentVrm.humanoid.getNormalizedBoneNode('chest');
+            const head = currentVrm.humanoid.getNormalizedBoneNode('head');
+            
+            if (!spine) return;
+            
+            updateStatus('🙇 인사(절) 중...');
+            
+            let time = 0;
+            const bowAnim = setInterval(() => {
+                time += 0.05;
+                
+                const bowAmount = Math.sin(time) * 0.4;
+                
+                spine.rotation.x = bowAmount * 0.5;
+                if (chest) chest.rotation.x = bowAmount * 0.3;
+                if (head) head.rotation.x = bowAmount * 0.2;
+                
+                if (time > Math.PI) {
+                    clearInterval(bowAnim);
+                    spine.rotation.x = 0;
+                    if (chest) chest.rotation.x = 0;
+                    if (head) head.rotation.x = 0;
+                    updateStatus('✅ 준비 완료');
+                }
+            }, 16);
+        };
+        
+        // 립싱크 시작
+        window.startLipSync = function() {
+            if (!currentVrm || !currentVrm.expressionManager) return;
+            
+            isSpeaking = true;
+            document.getElementById('speech-indicator').classList.add('speaking');
+            updateStatus('🎙️ 말하는 중...');
+            
+            const em = currentVrm.expressionManager;
+            let time = 0;
+            
+            lipSyncInterval = setInterval(() => {
+                time += 0.15;
+                
+                // 입 모양 변화
+                const aa = (Math.sin(time * 8) + 1) * 0.25;
+                const oh = (Math.sin(time * 6 + 1) + 1) * 0.15;
+                const ee = (Math.sin(time * 10 + 2) + 1) * 0.1;
+                
+                try {
+                    em.setValue('aa', aa);
+                    em.setValue('oh', oh);
+                    em.setValue('ee', ee);
+                } catch(e) {}
+                
+            }, 50);
+        };
+        
+        // 립싱크 종료
+        window.stopLipSync = function() {
+            isSpeaking = false;
+            document.getElementById('speech-indicator').classList.remove('speaking');
+            updateStatus('✅ 준비 완료');
+            
+            if (lipSyncInterval) {
+                clearInterval(lipSyncInterval);
+                lipSyncInterval = null;
+            }
+            
+            if (currentVrm && currentVrm.expressionManager) {
+                const em = currentVrm.expressionManager;
+                try {
+                    em.setValue('aa', 0);
+                    em.setValue('oh', 0);
+                    em.setValue('ee', 0);
+                } catch(e) {}
+            }
+        };
+        
+        // 말하기 (지정된 시간 동안)
+        window.speak = function(duration = 3000) {
+            window.startLipSync();
+            setTimeout(() => window.stopLipSync(), duration);
+        };
+        
+        // 모델 로드
+        window.loadModel = function(url) {
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('loading').innerHTML = 
+                '<div class="spinner"></div><div>새 모델 로딩 중...</div>';
+            loadVRM(url);
+        };
+        
+        // 윈도우 리사이즈
+        function onWindowResize() {
+            const container = document.getElementById('vrm-container');
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+        
+        // 애니메이션 루프
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const delta = clock.getDelta();
+            
+            if (currentVrm) {
+                currentVrm.update(delta);
+            }
+            
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        
+        // 외부 메시지 수신 (Streamlit/부모 창과 통신)
+        window.addEventListener('message', (event) => {
+            const data = event.data;
+            
+            switch(data.type) {
+                case 'loadVRM':
+                    window.loadModel(data.url);
+                    break;
+                case 'speak':
+                    window.speak(data.duration || 3000);
+                    break;
+                case 'startLipSync':
+                    window.startLipSync();
+                    break;
+                case 'stopLipSync':
+                    window.stopLipSync();
+                    break;
+                case 'setEmotion':
+                    window.setEmotion(data.emotion);
+                    break;
+                case 'wave':
+                    window.doWave();
+                    break;
+                case 'bow':
+                    window.doBow();
+                    break;
+            }
+        });
+        
+        // 초기화 실행
+        init();
+    </script>
+</body>
+</html>
