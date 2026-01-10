@@ -10,7 +10,7 @@ import base64
 
 # VRM 아바타 모델 URL 설정
 # - 커스텀 VRM 모델 사용
-VRM_MODEL_URL = "https://chatbot.ahnsem.com/sdg1.vrm"
+VRM_MODEL_URL = "https://raw.githubusercontent.com/sd40-teacher/school-chatbot/main/sdg1.vrm"
 
 # 음성 출력 활성화 여부
 TTS_ENABLED = True
