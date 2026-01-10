@@ -16,9 +16,9 @@ class SchoolChatbot:
         self.api_key = api_key
         self.docs_path = docs_path
         
-        # 1. 모델 설정 (OpenRouter - Llama 무료 모델)
+        # 1. 모델 설정 (OpenRouter - Gemini 2.0 Flash 무료 모델)
         self.llm = ChatOpenAI(
-            model="meta-llama/llama-3.2-3b-instruct:free",
+            model="google/gemini-2.0-flash-exp:free",
             openai_api_key=api_key,
             openai_api_base="https://openrouter.ai/api/v1",
             temperature=0.7
