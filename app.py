@@ -3,6 +3,7 @@ from rag_engine import SchoolChatbot
 from tts_engine import text_to_speech, get_audio_base64
 import os
 import base64
+import time
 
 # ============================================================
 # 🔧 1. 앱 설정 및 스타일
@@ -20,7 +21,6 @@ st.markdown("""
 <style>
     .stApp { background: #f8f9fa; }
     .stChatMessage { border-radius: 15px; margin-bottom: 10px; }
-    .avatar-container { border: 3px solid #667eea; border-radius: 20px; overflow: hidden; background: #667eea; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -41,23 +41,31 @@ def load_chatbot():
 chatbot = load_chatbot()
 
 # ============================================================
-# 🔧 2. 아바타 & 오디오 통합 뷰어 함수 (핵심 수정 부분)
+# 🔧 2. 아바타 & 오디오 통합 뷰어 (강제 갱신 로직 추가)
 # ============================================================
-def vrm_viewer_component(audio_base64=None):
-    # 오디오 데이터가 있으면 자바스크립트로 자동 재생 명령을 내립니다.
-    audio_trigger = ""
+def vrm_viewer_component(audio_base64=None, key=None):
+    # 오디오가 있을 때만 자바스크립트 실행 코드 생성
+    audio_js = ""
     if audio_base64:
-        audio_trigger = f"""
+        audio_js = f"""
             const audio = document.getElementById("vrm-audio");
             audio.src = "data:audio/mp3;base64,{audio_base64}";
-            audio.play().catch(e => console.log("자동 재생 차단됨:", e));
+            // 모델 로딩과 상관없이 오디오 재생 시도
+            const playAudio = () => {{
+                audio.play().catch(e => {{
+                    console.log("자동 재생이 차단됨. 사용자의 인터랙션이 필요합니다.");
+                    // 차단된 경우 화면 클릭 시 재생되도록 대기
+                    window.addEventListener("click", () => audio.play(), {{ once: true }});
+                }});
+            }};
+            playAudio();
         """
 
     html_code = f"""
-    <div style="width: 100%; height: 500px; background: #667eea; border-radius: 15px; position: relative;">
+    <div style="width: 100%; height: 550px; background: #667eea; border-radius: 15px; position: relative; overflow: hidden;">
         <audio id="vrm-audio" style="display:none;"></audio>
         <canvas id="vrm-canvas" style="width: 100%; height: 100%; cursor: grab;"></canvas>
-        <div id="loading" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white;">모델 로드 중...</div>
+        <div id="loading" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-family: sans-serif;">로딩 중...</div>
         
         <script type="importmap">
         {{
@@ -80,13 +88,19 @@ def vrm_viewer_component(audio_base64=None):
             const camera = new THREE.PerspectiveCamera(35, window.innerWidth/window.innerHeight, 0.1, 100);
             camera.position.set(0, 1.4, 2.5);
 
-            const renderer = new THREE.WebGLRenderer({{ canvas: document.getElementById("vrm-canvas"), antialias: true, alpha: true }});
+            const renderer = new THREE.WebGLRenderer({{ 
+                canvas: document.getElementById("vrm-canvas"), 
+                antialias: true, 
+                alpha: true,
+                preserveDrawingBuffer: true 
+            }});
             renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
             renderer.outputColorSpace = THREE.SRGBColorSpace;
 
             const controls = new OrbitControls(camera, renderer.domElement);
             controls.target.set(0, 1.2, 0);
-            controls.update();
+            controls.enableDamping = true;
 
             scene.add(new THREE.AmbientLight(0xffffff, 1.0));
             const light = new THREE.DirectionalLight(0xffffff, 1.0);
@@ -95,12 +109,13 @@ def vrm_viewer_component(audio_base64=None):
 
             const loader = new GLTFLoader();
             loader.register((parser) => new VRMLoaderPlugin(parser));
+            
             loader.load("{VRM_MODEL_URL}", (gltf) => {{
                 vrm = gltf.userData.vrm;
                 scene.add(vrm.scene);
-                vrm.scene.rotation.y = Math.PI; // 정면 설정
+                vrm.scene.rotation.y = Math.PI;
                 document.getElementById("loading").style.display = "none";
-                {audio_trigger} // 모델 로드 후 오디오 재생 실행
+                {audio_js} // 모델 로드 완료 시점에 재생 로직 실행
             }});
 
             const audio = document.getElementById("vrm-audio");
@@ -112,22 +127,18 @@ def vrm_viewer_component(audio_base64=None):
                 if (vrm) {{
                     vrm.update(delta);
                     
-                    // 오디오 재생 중일 때만 입 움직임 (5개 쉐이프키 조합)
                     if (!audio.paused && !audio.ended && vrm.expressionManager) {{
                         const t = Date.now() * 0.012;
                         const val = (Math.sin(t) + 1) * 0.5;
-                        
                         try {{
                             vrm.expressionManager.setValue("Fcl_MTH_A", val * 0.4);
-                            vrm.expressionManager.setValue("Fcl_MTH_I", (Math.cos(t * 0.7) + 1) * 0.1);
-                            vrm.expressionManager.setValue("Fcl_MTH_U", (Math.sin(t * 0.5) + 1) * 0.15);
-                            vrm.expressionManager.setValue("Fcl_MTH_E", (Math.cos(t * 0.8) + 1) * 0.2);
+                            vrm.expressionManager.setValue("Fcl_MTH_I", (Math.cos(t*0.7)+1) * 0.1);
+                            vrm.expressionManager.setValue("Fcl_MTH_U", (Math.sin(t*0.5)+1) * 0.15);
+                            vrm.expressionManager.setValue("Fcl_MTH_E", (Math.cos(t*0.8)+1) * 0.2);
                             vrm.expressionManager.setValue("Fcl_MTH_O", val * 0.3);
-                            vrm.expressionManager.setValue("aa", val * 0.5); // 보조용
                         }} catch(e) {{}}
                     }} else if (vrm.expressionManager) {{
-                        // 소리 안 날 땐 입 다물기
-                        ["Fcl_MTH_A","Fcl_MTH_I","Fcl_MTH_U","Fcl_MTH_E","Fcl_MTH_O","aa"].forEach(k => {{
+                        ["Fcl_MTH_A","Fcl_MTH_I","Fcl_MTH_U","Fcl_MTH_E","Fcl_MTH_O"].forEach(k => {{
                             try {{ vrm.expressionManager.setValue(k, 0); }} catch(e) {{}}
                         }});
                     }}
@@ -139,64 +150,68 @@ def vrm_viewer_component(audio_base64=None):
         </script>
     </div>
     """
-    st.components.v1.html(html_code, height=520)
+    # key 매개변수를 사용하여 Streamlit이 컴포넌트를 다시 그리도록 유도
+    st.components.v1.html(html_code, height=550, key=key)
 
 # ============================================================
-# 🔧 3. 메인 레이아웃 및 로직
+# 🔧 3. 메인 로직
 # ============================================================
-st.title("🏫 성동글로벌경영고 AI 도우미")
+st.title("🏫 성글고 AI 도우미")
 
+# 세션 상태 초기화
 if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "assistant", "content": "안녕하세요! 성글고 AI 도우미입니다. 무엇을 도와드릴까요?"}]
+    st.session_state.messages = [{"role": "assistant", "content": "안녕하세요! 성글고 AI 도우미입니다. 😊"}]
 if "current_audio" not in st.session_state:
     st.session_state.current_audio = None
+if "refresh_count" not in st.session_state:
+    st.session_state.refresh_count = 0
 
 col_chat, col_vrm = st.columns([3, 2])
 
 with col_chat:
-    # 채팅 내역 표시
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    # 사용자 입력 처리
-    if prompt := st.chat_input("학교에 대해 궁금한 점을 물어보세요!"):
+    if prompt := st.chat_input("질문하세요"):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
 
         with st.chat_message("assistant"):
-            with st.spinner("생각 중..."):
-                response = chatbot.ask(prompt)
-                st.markdown(response)
-                
-                # TTS 생성
-                audio_bytes = text_to_speech(response)
-                audio_base64 = get_audio_base64(audio_bytes)
-                
-                st.session_state.messages.append({"role": "assistant", "content": response})
-                st.session_state.current_audio = audio_base64
-                st.rerun() # 아바타에 오디오를 전달하기 위해 재실행
+            response = chatbot.ask(prompt)
+            st.markdown(response)
+            
+            audio_bytes = text_to_speech(response)
+            audio_base64 = get_audio_base64(audio_bytes)
+            
+            st.session_state.messages.append({"role": "assistant", "content": response})
+            st.session_state.current_audio = audio_base64
+            # 답변이 올 때마다 refresh_count를 올려서 아바타 창을 새로 고침
+            st.session_state.refresh_count += 1
+            st.rerun()
 
 with col_vrm:
     st.subheader("🎭 AI 도우미")
-    # 세션에 저장된 최신 오디오 데이터를 아바타 컴포넌트로 전달
-    vrm_viewer_component(st.session_state.current_audio)
     
-    # 다시 듣기 버튼
-    if st.session_state.current_audio:
-        if st.button("🔄 마지막 답변 다시 듣기", use_container_width=True):
+    # 다시 듣기 버튼 로직
+    if st.button("🔄 마지막 답변 다시 듣기", use_container_width=True):
+        if st.session_state.current_audio:
+            # 카운트를 변경하면 vrm_viewer_component의 key가 바뀌어 새로고침됨
+            st.session_state.refresh_count += 1
             st.rerun()
+        else:
+            st.warning("먼저 질문을 해서 답변을 생성해 주세요.")
 
-# 사이드바 정보
+    # 아바타 컴포넌트 실행 (key를 부여하여 버튼 클릭 시 강제 재로딩)
+    vrm_viewer_component(
+        audio_base64=st.session_state.current_audio, 
+        key=f"vrm_display_{st.session_state.refresh_count}"
+    )
+
 with st.sidebar:
-    st.header("🏫 학교 정보")
-    st.markdown("""
-    **성동글로벌경영고등학교**
-    - 📍 서울 중구 퇴계로 375
-    - 📞 02-2252-1932
-    """)
     if st.button("🔄 대화 초기화"):
-        st.session_state.messages = [{"role": "assistant", "content": "안녕하세요! 무엇을 도와드릴까요?"}]
+        st.session_state.messages = [{"role": "assistant", "content": "안녕하세요! 😊"}]
         st.session_state.current_audio = None
+        st.session_state.refresh_count = 0
         st.rerun()
