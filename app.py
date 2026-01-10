@@ -1,20 +1,70 @@
+import streamlit as st
+from rag_engine import SchoolChatbot
+from tts_engine import text_to_speech, get_audio_base64
+import os
+import base64
+
+# ============================================================
+# 🔧 1. 앱 설정
+# ============================================================
+VRM_MODEL_URL = "https://raw.githubusercontent.com/sd40-teacher/school-chatbot/main/sdg1.vrm"
+
+st.set_page_config(page_title="성글고 AI 도우미", page_icon="🏫", layout="wide")
+
+# API 키 및 챗봇 로드 (오류 방지를 위한 예외 처리)
+try:
+    api_key = st.secrets["OPENROUTER_API_KEY"]
+except:
+    st.error("⚠️ API 키가 설정되지 않았습니다.")
+    st.stop()
+
+@st.cache_resource
+def load_chatbot():
+    try:
+        return SchoolChatbot(api_key=api_key, docs_path="data/school_docs")
+    except Exception as e:
+        st.error(f"챗봇 로딩 실패: {e}")
+        return None
+
+chatbot = load_chatbot()
+
+# ============================================================
+# 🔧 2. 아바타 & 오디오 통합 뷰어 (구문 오류 완벽 검수 버전)
+# ============================================================
 def vrm_viewer_component(audio_base64=None):
-    # (중략: audio_init_js 로직은 동일)
-    
+    audio_init_js = ""
+    if audio_base64:
+        audio_init_js = f"""
+            const audio = document.getElementById("vrm-audio");
+            audio.src = "data:audio/mp3;base64,{audio_base64}";
+            const btn = document.getElementById("play-btn");
+            btn.style.background = "#ff4b4b";
+            btn.innerText = "▶ 답변 듣기 (클릭)";
+        """
+
     html_code = f"""
-    <div style="width: 100%; height: 650px; background: #8a94c8; border-radius: 20px; position: relative; overflow: hidden; display: flex; flex-direction: column;">
+    <div style="width: 100%; height: 620px; background: #8a94c8; border-radius: 20px; position: relative; overflow: hidden; display: flex; flex-direction: column;">
         <canvas id="vrm-canvas" style="width: 100%; height: 500px; cursor: grab;"></canvas>
-        
         <audio id="vrm-audio" style="display:none;"></audio>
         
-        <div style="height: 150px; background: #667eea; display: flex; justify-content: center; align-items: center;">
+        <div style="height: 120px; background: #667eea; display: flex; justify-content: center; align-items: center;">
             <button id="play-btn" style="
                 padding: 15px 40px; font-size: 18px; font-weight: bold; cursor: pointer; 
                 background: #4CAF50; color: white; border: none; border-radius: 15px; 
-                box-shadow: 0 4px 15px rgba(0,0,0,0.3); width: 80%;">
-                {"🔈 질문 대기 중" if not audio_base64 else "▶ 답변 듣기 / 다시 듣기"}
+                box-shadow: 0 4px 15px rgba(0,0,0,0.3); width: 85%;">
+                {"🔈 질문을 입력하세요" if not audio_base64 else "▶ 답변 듣기 / 다시 듣기"}
             </button>
         </div>
+
+        <script type="importmap">
+        {{
+            "imports": {{
+                "three": "https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.158.0/examples/jsm/",
+                "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3.1.3/lib/three-vrm.module.min.js"
+            }}
+        }}
+        </script>
 
         <script type="module">
             import * as THREE from "three";
@@ -25,35 +75,106 @@ def vrm_viewer_component(audio_base64=None):
             let vrm = null;
             const scene = new THREE.Scene();
             const canvas = document.getElementById("vrm-canvas");
-
-            // 1. 시야각(FOV)을 30으로 좁혀서 모델을 더 크게 잡음
-            const camera = new THREE.PerspectiveCamera(30, canvas.clientWidth / canvas.clientHeight, 0.1, 100);
             
-            // 2. 카메라 위치 수정: y(높이)는 낮추고, z(거리)는 적당히 배치
-            camera.position.set(0, 1.2, 2.5); 
+            // 카메라 설정: 정수리 샷 방지를 위해 y축과 target 조정
+            const camera = new THREE.PerspectiveCamera(30, canvas.clientWidth / canvas.clientHeight, 0.1, 100);
+            camera.position.set(0, 1.3, 2.5); // 상체가 잘 보이도록 뒤로 살짝 뺌
 
             const renderer = new THREE.WebGLRenderer({{ canvas: canvas, antialias: true, alpha: true }});
             renderer.setSize(canvas.clientWidth, canvas.clientHeight);
-            renderer.outputColorSpace = THREE.SRGBColorSpace;
+            renderer.setPixelRatio(window.devicePixelRatio);
 
             const controls = new OrbitControls(camera, renderer.domElement);
-            
-            // 3. 시선(Target) 수정: 아바타의 얼굴 근처(1.2)를 바라보게 고정
-            controls.target.set(0, 1.2, 0); 
+            controls.target.set(0, 1.2, 0); // 아바타 얼굴 높이에 시선 고정
             controls.update();
 
-            // (중략: 조명 및 로더 로직...)
+            scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+            const light = new THREE.DirectionalLight(0xffffff, 1.0);
+            light.position.set(1, 2, 3);
+            scene.add(light);
+
             const loader = new GLTFLoader();
             loader.register((parser) => new VRMLoaderPlugin(parser));
-            loader.load("{VRM_MODEL_URL}", (gltf) => {{
-                vrm = gltf.userData.vrm;
-                scene.add(vrm.scene);
-                // 아바타가 정면을 보게 회전
-                vrm.scene.rotation.y = Math.PI; 
-            }});
+            loader.load("{VRM_MODEL_URL}", 
+                (gltf) => {{
+                    vrm = gltf.userData.vrm;
+                    scene.add(vrm.scene);
+                    vrm.scene.rotation.y = Math.PI;
+                    {audio_init_js}
+                }},
+                undefined,
+                (error) => console.error("모델 로딩 에러:", error)
+            );
 
-            // (중략: animate 로직...)
+            const audio = document.getElementById("vrm-audio");
+            const btn = document.getElementById("play-btn");
+            
+            btn.onclick = () => {{
+                if(audio.src && audio.paused) {{
+                    audio.currentTime = 0;
+                    audio.play();
+                    btn.innerText = "💬 답변 말하는 중...";
+                }}
+            }};
+            
+            audio.onended = () => {{ btn.innerText = "🔄 다시 듣기"; }};
+
+            const clock = new THREE.Clock();
+            function animate() {{
+                requestAnimationFrame(animate);
+                const delta = clock.getDelta();
+                const time = clock.elapsedTime;
+
+                if (vrm) {{
+                    vrm.update(delta);
+                    // 대기 동작 (숨쉬기)
+                    const spine = vrm.humanoid.getNormalizedBoneNode('spine');
+                    if(spine) spine.rotation.x = Math.sin(time * 1.5) * 0.02;
+
+                    // 립싱크
+                    if (!audio.paused && !audio.ended && vrm.expressionManager) {{
+                        const s = (Math.sin(Date.now() * 0.015) + 1) * 0.3;
+                        vrm.expressionManager.setValue("aa", s);
+                        vrm.expressionManager.setValue("Fcl_MTH_A", s);
+                    }}
+                }}
+                renderer.render(scene, camera);
+            }}
+            animate();
         </script>
     </div>
     """
-    st.components.v1.html(html_code, height=660)
+    st.components.v1.html(html_code, height=640)
+
+# ============================================================
+# 🔧 3. 메인 화면 구성
+# ============================================================
+st.title("🏫 성글고 AI 도우미")
+
+if "messages" not in st.session_state:
+    st.session_state.messages = [{"role": "assistant", "content": "안녕하세요! 성글고에 대해 무엇이든 물어보세요. 😊"}]
+if "current_audio" not in st.session_state:
+    st.session_state.current_audio = None
+
+col_chat, col_vrm = st.columns([3, 2])
+
+with col_chat:
+    for msg in st.session_state.messages:
+        with st.chat_message(msg["role"]): st.markdown(msg["content"])
+
+    if prompt := st.chat_input("질문을 입력하세요..."):
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"): st.markdown(prompt)
+        with st.chat_message("assistant"):
+            if chatbot:
+                response = chatbot.ask(prompt)
+                st.markdown(response)
+                audio_bytes = text_to_speech(response)
+                audio_base64 = get_audio_base64(audio_bytes)
+                st.session_state.messages.append({"role": "assistant", "content": response})
+                st.session_state.current_audio = audio_base64
+                st.rerun()
+
+with col_vrm:
+    st.subheader("🎭 AI 아바타")
+    vrm_viewer_component(st.session_state.current_audio)
