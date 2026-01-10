@@ -27,7 +27,7 @@ def load_chatbot():
 chatbot = load_chatbot()
 
 # ============================================================
-# 🔧 2. 아바타 & 오디오 통합 뷰어 (카메라 유지 + Idle 복구)
+# 🔧 2. 아바타 & 오디오 통합 뷰어 (카메라 앵글 및 Idle 보정)
 # ============================================================
 def vrm_viewer_component(audio_base64=None):
     audio_init_js = ""
@@ -74,16 +74,17 @@ def vrm_viewer_component(audio_base64=None):
             const scene = new THREE.Scene();
             const canvas = document.getElementById("vrm-canvas");
             
-            // [카메라 고정] 이전 버전에서 성공했던 앵글 유지
-            const camera = new THREE.PerspectiveCamera(30, canvas.clientWidth / canvas.clientHeight, 0.1, 100);
-            camera.position.set(0, 1.3, 2.5); 
+            // [수정] 카메라 위치 최적화: 높이(Y)를 올리고 거리(Z)를 확보하여 상반신이 잘 보이게 함
+            const camera = new THREE.PerspectiveCamera(35, canvas.clientWidth / canvas.clientHeight, 0.1, 100);
+            camera.position.set(0, 1.4, 3.2); 
 
             const renderer = new THREE.WebGLRenderer({{ canvas: canvas, antialias: true, alpha: true }});
             renderer.setSize(canvas.clientWidth, canvas.clientHeight);
             renderer.setPixelRatio(window.devicePixelRatio);
 
             const controls = new OrbitControls(camera, renderer.domElement);
-            controls.target.set(0, 1.2, 0); 
+            // [수정] 바라보는 중심점(Target)을 캐릭터의 가슴/얼굴 높이로 고정
+            controls.target.set(0, 1.25, 0); 
             controls.update();
 
             scene.add(new THREE.AmbientLight(0xffffff, 0.7));
@@ -96,7 +97,7 @@ def vrm_viewer_component(audio_base64=None):
             loader.load("{VRM_MODEL_URL}", (gltf) => {{
                 vrm = gltf.userData.vrm;
                 scene.add(vrm.scene);
-                vrm.scene.rotation.y = Math.PI;
+                vrm.scene.rotation.y = Math.PI; // 180도 회전하여 앞을 보게 함
                 {audio_init_js}
             }});
 
@@ -112,15 +113,17 @@ def vrm_viewer_component(audio_base64=None):
                 const time = clock.elapsedTime;
 
                 if (vrm) {{
-                    // --- [IDLE 동작 복구] ---
+                    // --- [IDLE 동작 최적화] ---
                     const spine = vrm.humanoid.getNormalizedBoneNode('spine');
                     const neck = vrm.humanoid.getNormalizedBoneNode('neck');
                     const hips = vrm.humanoid.getNormalizedBoneNode('hips');
 
-                    // 부드러운 흔들림 효과
-                    if(spine) spine.rotation.x = Math.sin(time * 1.5) * 0.03; 
-                    if(neck) neck.rotation.y = Math.sin(time * 0.7) * 0.05; 
-                    if(hips) hips.position.y = Math.sin(time * 1.5) * 0.005;
+                    // 미세하고 부드러운 흔들림 (수치 축소하여 앵글 이탈 방지)
+                    if(spine) spine.rotation.x = Math.sin(time * 1.5) * 0.02; 
+                    if(neck) neck.rotation.y = Math.sin(time * 0.7) * 0.04; 
+                    
+                    // Hips(골반) 위치 이동은 카메라 앵글을 흔들리게 하므로 아주 미세하게 적용
+                    if(hips) hips.position.y = Math.sin(time * 1.5) * 0.002;
 
                     vrm.update(delta);
 
@@ -142,7 +145,9 @@ def vrm_viewer_component(audio_base64=None):
     """
     st.components.v1.html(html_code, height=640)
 
-# (이하 메인 화면 구성 코드는 이전과 동일합니다...)
+# ============================================================
+# 🔧 3. 메인 화면 UI 구성
+# ============================================================
 st.title("🏫 성글고 AI 도우미")
 
 if "messages" not in st.session_state:
@@ -155,15 +160,21 @@ col_chat, col_vrm = st.columns([3, 2])
 with col_chat:
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]): st.markdown(msg["content"])
+    
     if prompt := st.chat_input("질문을 입력하세요..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"): st.markdown(prompt)
+        
         with st.chat_message("assistant"):
             if chatbot:
-                response = chatbot.ask(prompt)
+                with st.spinner("생각 중..."):
+                    response = chatbot.ask(prompt)
                 st.markdown(response)
+                
+                # TTS 생성
                 audio_bytes = text_to_speech(response)
                 audio_base64 = get_audio_base64(audio_bytes)
+                
                 st.session_state.messages.append({"role": "assistant", "content": response})
                 st.session_state.current_audio = audio_base64
                 st.rerun()
