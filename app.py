@@ -5,21 +5,13 @@ import os
 import base64
 
 # ============================================================
-# 🔧 관리자 설정 영역 - 여기서 앱 설정을 변경하세요!
+# 🔧 관리자 설정 영역
 # ============================================================
-
-# VRM 아바타 모델 URL 설정
 VRM_MODEL_URL = "https://raw.githubusercontent.com/sd40-teacher/school-chatbot/main/sdg1.vrm"
-
-# 음성 출력 활성화 여부
 TTS_ENABLED = True
-
-# 아바타 표시 여부
 AVATAR_ENABLED = True
-
 # ============================================================
 
-# 페이지 설정
 st.set_page_config(
     page_title="성동글로벌경영고등학교 AI 안내",
     page_icon="🏫",
@@ -27,37 +19,13 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# CSS 스타일
+# CSS 스타일 (중괄호 이스케이프 처리 필요 없음 - 일반 문자열)
 st.markdown("""
 <style>
-    .main {
-        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-    }
-    
-    .stButton > button {
-        border-radius: 25px;
-        padding: 10px 25px;
-        font-weight: 600;
-        transition: all 0.3s ease;
-    }
-    
-    .stButton > button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-    }
-    
-    h1 {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        font-weight: 800;
-    }
-    
-    audio {
-        width: 100%;
-        border-radius: 30px;
-        margin-top: 10px;
-    }
+    .main { background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); }
+    .stButton > button { border-radius: 25px; padding: 10px 25px; font-weight: 600; transition: all 0.3s ease; }
+    .stButton > button:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
+    h1 { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 800; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -65,34 +33,25 @@ st.markdown("""
 try:
     api_key = st.secrets["OPENROUTER_API_KEY"]
 except Exception as e:
-    st.error("⚠️ API 키가 설정되지 않았습니다. Streamlit Cloud의 Secrets를 확인해주세요.")
-    st.info("📌 Streamlit Cloud → App settings → Secrets에서 OPENROUTER_API_KEY를 설정하세요.")
+    st.error("⚠️ API 키가 설정되지 않았습니다.")
     st.stop()
 
-# 챗봇 초기화
 @st.cache_resource
 def load_chatbot():
-    with st.spinner("📚 학교 자료를 불러오는 중... 잠시만 기다려주세요."):
+    with st.spinner("📚 학교 자료를 불러오는 중..."):
         try:
-            chatbot = SchoolChatbot(
-                api_key=api_key,
-                docs_path="data/school_docs"
-            )
-            return chatbot
+            return SchoolChatbot(api_key=api_key, docs_path="data/school_docs")
         except Exception as e:
             st.error(f"❌ 챗봇 로드 실패: {e}")
-            st.info("💡 data/school_docs 폴더에 PDF 파일이 있는지 확인해주세요.")
             return None
 
 chatbot = load_chatbot()
+if chatbot is None: st.stop()
 
-if chatbot is None:
-    st.stop()
-
-# VRM Viewer HTML 생성 (5개 쉐이프키 로직 적용)
+# VRM Viewer HTML (중괄호 {{ }} 이스케이프 완료)
 def get_vrm_viewer_html():
     return f"""
-    <div style="width: 100%; height: 400px; border-radius: 20px; overflow: hidden; 
+    <div style="width: 100%; height: 480px; border-radius: 20px; overflow: hidden; 
                 box-shadow: 0 10px 40px rgba(0,0,0,0.15); background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
         <iframe 
             id="vrm-iframe"
@@ -109,18 +68,12 @@ def get_vrm_viewer_html():
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
             color: white; text-align: center; font-family: sans-serif;
         }}
-        .spinner {{
-            border: 3px solid rgba(255,255,255,0.3); border-top: 3px solid white;
-            border-radius: 50%; width: 30px; height: 30px;
-            animation: spin 1s linear infinite; margin: 0 auto 10px;
-        }}
-        @keyframes spin {{ 0% {{ transform: rotate(0deg); }} 100% {{ transform: rotate(360deg); }} }}
     </style>
 </head>
 <body>
     <div id="container">
         <canvas id="canvas"></canvas>
-        <div id="loading"><div class="spinner"></div><div>아바타 로딩 중...</div></div>
+        <div id="loading">아바타 로딩 중...</div>
     </div>
     <script type="importmap">
     {{
@@ -146,14 +99,11 @@ def get_vrm_viewer_html():
         
         const renderer = new THREE.WebGLRenderer({{ canvas, antialias: true }});
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         renderer.outputColorSpace = THREE.SRGBColorSpace;
         
         const controls = new OrbitControls(camera, canvas);
         controls.target.set(0, 1.0, 0);
-        controls.enablePan = false;
         controls.enableDamping = true;
-        controls.update();
         
         scene.add(new THREE.AmbientLight(0xffffff, 0.7));
         const light = new THREE.DirectionalLight(0xffffff, 1.0);
@@ -169,38 +119,24 @@ def get_vrm_viewer_html():
         loader.load("{VRM_MODEL_URL}", (gltf) => {{
             vrm = gltf.userData.vrm;
             if (vrm) {{
-                VRMUtils.removeUnnecessaryVertices(vrm.scene);
-                VRMUtils.removeUnnecessaryJoints(vrm.scene);
-                
                 scene.add(vrm.scene);
-                vrm.scene.rotation.y = 0; // 블렌더 정면 기준 (0)
+                vrm.scene.rotation.y = 0;
                 document.getElementById("loading").style.display = "none";
                 
-                // 눈 깜빡임
                 setInterval(() => {{
                     if (vrm && vrm.expressionManager && !isSpeaking) {{
-                        try {{
-                            vrm.expressionManager.setValue("blink", 1);
-                            setTimeout(() => vrm.expressionManager.setValue("blink", 0), 100);
-                        }} catch(e) {{}}
+                        vrm.expressionManager.setValue("blink", 1);
+                        setTimeout(() => vrm.expressionManager.setValue("blink", 0), 100);
                     }}
-                }}, 3000 + Math.random() * 2000);
+                }}, 4000);
             }}
         }});
         
-        // 립싱크 제어 함수
-        window.startLipSync = function() {{ isSpeaking = true; }};
-        window.stopLipSync = function() {{
-            isSpeaking = false;
+        window.startLipSync = () => {{ isSpeaking = true; }};
+        window.stopLipSync = () => {{ 
+            isSpeaking = false; 
             if (vrm && vrm.expressionManager) {{
-                try {{
-                    // 모든 입 모양 쉐이프키 초기화
-                    vrm.expressionManager.setValue("Fcl_MTH_A", 0);
-                    vrm.expressionManager.setValue("Fcl_MTH_I", 0);
-                    vrm.expressionManager.setValue("Fcl_MTH_U", 0);
-                    vrm.expressionManager.setValue("Fcl_MTH_E", 0);
-                    vrm.expressionManager.setValue("Fcl_MTH_O", 0);
-                }} catch(e) {{}}
+                ["Fcl_MTH_A", "Fcl_MTH_I", "Fcl_MTH_U", "Fcl_MTH_E", "Fcl_MTH_O"].forEach(k => vrm.expressionManager.setValue(k, 0));
             }}
         }};
         
@@ -208,34 +144,22 @@ def get_vrm_viewer_html():
         function animate() {{
             requestAnimationFrame(animate);
             const delta = clock.getDelta();
-            
             if (vrm) {{
                 vrm.update(delta);
-                
-                // 5개 쉐이프키를 활용한 정교한 립싱크 애니메이션
                 if (isSpeaking && vrm.expressionManager) {{
                     lipSyncTime += delta * 15;
-                    try {{
-                        vrm.expressionManager.setValue("Fcl_MTH_A", (Math.sin(lipSyncTime) + 1) * 0.35);
-                        vrm.expressionManager.setValue("Fcl_MTH_I", (Math.cos(lipSyncTime * 0.6) + 1) * 0.1);
-                        vrm.expressionManager.setValue("Fcl_MTH_U", (Math.sin(lipSyncTime * 0.8) + 1) * 0.1);
-                        vrm.expressionManager.setValue("Fcl_MTH_E", (Math.cos(lipSyncTime * 1.1) + 1) * 0.15);
-                        vrm.expressionManager.setValue("Fcl_MTH_O", (Math.sin(lipSyncTime * 0.7) + 1) * 0.2);
-                    } catch(e) {{}}
+                    vrm.expressionManager.setValue("Fcl_MTH_A", (Math.sin(lipSyncTime) + 1) * 0.35);
+                    vrm.expressionManager.setValue("Fcl_MTH_I", (Math.cos(lipSyncTime * 0.6) + 1) * 0.1);
+                    vrm.expressionManager.setValue("Fcl_MTH_U", (Math.sin(lipSyncTime * 0.8) + 1) * 0.1);
+                    vrm.expressionManager.setValue("Fcl_MTH_E", (Math.cos(lipSyncTime * 1.1) + 1) * 0.15);
+                    vrm.expressionManager.setValue("Fcl_MTH_O", (Math.sin(lipSyncTime * 0.7) + 1) * 0.2);
                 }}
             }}
-            
             controls.update();
             renderer.render(scene, camera);
         }}
         animate();
-        
-        window.addEventListener("resize", () => {{
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        }});
-        
+
         window.addEventListener("message", (e) => {{
             if (e.data === "startLipSync") window.startLipSync();
             if (e.data === "stopLipSync") window.stopLipSync();
@@ -244,133 +168,54 @@ def get_vrm_viewer_html():
 </body>
 </html>
             '
-            width="100%" 
-            height="100%" 
-            style="border: none;"
-            allow="autoplay"
+            width="100%" height="100%" style="border: none;" allow="autoplay"
         ></iframe>
-    </div>
-    <div style="text-align: center; margin-top: 10px;">
-        <small style="color: #666;">🎭 3D 아바타 (마우스로 드래그하여 회전)</small>
     </div>
     """
 
-# 세션 상태 초기화
 if "messages" not in st.session_state:
-    st.session_state.messages = [
-        {
-            "role": "assistant", 
-            "content": "안녕하세요! 성동글로벌경영고등학교 AI 도우미입니다. 😊\n\n학교 교육과정, 입학 안내, 진로진학 등 궁금하신 점을 자유롭게 물어보세요!"
-        }
-    ]
-
+    st.session_state.messages = [{"role": "assistant", "content": "안녕하세요! 성동글로벌경영고등학교 AI 도우미입니다. 😊"}]
 if "last_audio" not in st.session_state:
     st.session_state.last_audio = None
 
-# 레이아웃 설정
 if AVATAR_ENABLED:
     col_chat, col_avatar = st.columns([3, 2])
 else:
     col_chat = st.container()
 
-# 왼쪽: 채팅 영역
 with col_chat:
     st.title("🏫 성글고 AI 도우미")
-    st.markdown("**성동글로벌경영고등학교**에 오신 것을 환영합니다!")
+    for msg in st.session_state.messages:
+        with st.chat_message(msg["role"]): st.markdown(msg["content"])
     
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-    
-    if prompt := st.chat_input("예: ERP 수업은 어떻게 진행되나요?"):
+    if prompt := st.chat_input("질문을 입력하세요"):
         st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
+        with st.chat_message("user"): st.markdown(prompt)
         
         with st.chat_message("assistant"):
-            with st.spinner("💭 답변을 생성하고 있습니다..."):
-                try:
-                    response = chatbot.ask(prompt)
-                    st.markdown(response)
-                    st.session_state.messages.append({"role": "assistant", "content": response})
-                    
-                    if TTS_ENABLED:
-                        with st.spinner("🔊 음성을 생성하고 있습니다..."):
-                            try:
-                                audio_bytes = text_to_speech(response)
-                                st.session_state.last_audio = audio_bytes
-                                audio_base64 = get_audio_base64(audio_bytes)
-                                
-                                # 립싱크 연동용 오디오 플레이어
-                                st.markdown(f"""
-                                <audio id="chat-audio" controls autoplay>
-                                    <source src="data:audio/mp3;base64,{audio_base64}" type="audio/mp3">
-                                </audio>
-                                <script>
-                                    var audio = document.getElementById("chat-audio");
-                                    // 오디오 재생 시 아바타에 신호 전달
-                                    window.parent.postMessage("startLipSync", "*");
-                                    audio.onplay = function() {{ window.parent.postMessage("startLipSync", "*"); }};
-                                    audio.onended = function() {{ window.parent.postMessage("stopLipSync", "*"); }};
-                                    audio.onpause = function() {{ window.parent.postMessage("stopLipSync", "*"); }};
-                                </script>
-                                """, unsafe_allow_html=True)
-                            except Exception as e:
-                                st.warning(f"⚠️ 음성 생성 실패: {str(e)}")
-                except Exception as e:
-                    error_msg = f"죄송합니다. 오류가 발생했습니다: {str(e)}"
-                    st.error(error_msg)
-                    st.session_state.messages.append({"role": "assistant", "content": error_msg})
-
-# 오른쪽: VRM 아바타 영역
-if AVATAR_ENABLED:
-    with col_avatar:
-        st.markdown("### 🎭 AI 도우미")
-        st.components.v1.html(get_vrm_viewer_html(), height=480)
-        
-        if TTS_ENABLED and st.session_state.last_audio:
-            if st.button("🔄 마지막 응답 다시 듣기", use_container_width=True):
-                audio_base64 = get_audio_base64(st.session_state.last_audio)
+            response = chatbot.ask(prompt)
+            st.markdown(response)
+            st.session_state.messages.append({"role": "assistant", "content": response})
+            
+            if TTS_ENABLED:
+                audio_bytes = text_to_speech(response)
+                st.session_state.last_audio = audio_bytes
+                audio_base64 = get_audio_base64(audio_bytes)
                 st.markdown(f"""
-                <audio id="replay-audio" controls autoplay>
+                <audio id="audio-player" controls autoplay style="display:none;">
                     <source src="data:audio/mp3;base64,{audio_base64}" type="audio/mp3">
                 </audio>
                 <script>
-                    var audio = document.getElementById("replay-audio");
+                    var audio = document.getElementById("audio-player");
                     window.parent.postMessage("startLipSync", "*");
                     audio.onplay = function() {{ window.parent.postMessage("startLipSync", "*"); }};
                     audio.onended = function() {{ window.parent.postMessage("stopLipSync", "*"); }};
+                    audio.onpause = function() {{ window.parent.postMessage("stopLipSync", "*"); }};
                 </script>
                 """, unsafe_allow_html=True)
+                st.audio(audio_bytes)
 
-# 사이드바 (기존 정보 유지)
-with st.sidebar:
-    st.image("https://via.placeholder.com/200x80/667eea/ffffff?text=성글고", use_container_width=True)
-    st.header("📖 이용 안내")
-    st.markdown("""
-    ### 💬 질문 예시
-    - 학교 교육과정은 어떻게 되나요?
-    - ERP 수업에 대해 알려주세요
-    - 입학 전형은 어떻게 진행되나요?
-    """)
-    
-    if TTS_ENABLED:
-        st.markdown("- 🔊 답변을 음성으로 들을 수 있습니다")
-    if AVATAR_ENABLED:
-        st.markdown("- 🎭 아바타 입 모양이 음성에 맞춰 움직입니다")
-    
-    st.divider()
-    st.markdown("""
-    ### 🏫 학교 정보
-    **성동글로벌경영고등학교**
-    📍 주소: 서울 중구 퇴계로 375
-    📞 전화: 02-2252-1932
-    """)
-    
-    if st.button("🔄 대화 내용 초기화", use_container_width=True):
-        st.session_state.messages = [{"role": "assistant", "content": "안녕하세요! 무엇을 도와드릴까요?"}]
-        st.session_state.last_audio = None
-        st.rerun()
-    
-    st.markdown("---")
-    st.caption("🤖 Powered by OpenRouter + Edge TTS")
+if AVATAR_ENABLED:
+    with col_avatar:
+        st.markdown("### 🎭 AI 아바타")
+        st.components.v1.html(get_vrm_viewer_html(), height=500)
